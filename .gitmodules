@@ -1,0 +1,3 @@
+[submodule "third_party/ptp"]
+	path = third_party/ptp
+	url = https://github.com/tiagomhrd/ptp.git
