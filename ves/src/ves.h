@@ -1,8 +1,5 @@
 #pragma once
 #ifndef VES
 #define VES
-#include <iostream>
-
-void VESHello();
-
+#include "V2D.h"
 #endif
