@@ -15,5 +15,4 @@ PRIVATE src  ../ves/src ../third_party/Catch2/ ../third_party/
 target_link_libraries(${PROJECT_NAME} 
 Catch2 
 ves 
-ptp 
 )
