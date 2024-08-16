@@ -20,6 +20,16 @@ namespace ves {
         // Method Matrices
         Init();
     }
+    void V2D::Init()
+    {
+        const Eigen::MatrixXd GGrad = GGrad_Impl();
+        const Eigen::MatrixXd BGrad = BGrad_Impl();
+        m_PiGrad = GGrad.ldlt().solve(BGrad);
+
+        const Eigen::MatrixXd G0 = G0_Impl();
+        const Eigen::MatrixXd B0 = B0_Impl();
+        m_Pi0 = G0.ldlt().solve(B0);
+    }
     const double V2D::Area() const
     {
         return m_SMIntegrals[0];
@@ -54,16 +64,6 @@ namespace ves {
     const double *V2D::IntegralData() const
     {
         return m_SMIntegrals.data();
-    }
-    void V2D::Init()
-    {
-        const Eigen::MatrixXd GGrad = GGrad_Impl();
-        const Eigen::MatrixXd BGrad = BGrad_Impl();
-        m_PiGrad = GGrad.ldlt().solve(BGrad);
-
-        const Eigen::MatrixXd G0 = G0_Impl();
-        const Eigen::MatrixXd B0 = B0_Impl();
-        m_Pi0 = G0.ldlt().solve(B0);
     }
     const std::vector<double> V2D::ScaledMonomialIntegrals(const int maxOrder) const
     {

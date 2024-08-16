@@ -4,16 +4,13 @@
 #include <mnl/include/pnl.hpp>
 #include <mnl/include/glq.hpp>
 #include <ptp/ptp/src/ptp.h>
+#include <Eigen/Eigen/Dense>
 
 #include "ves_internal.h"
 
 namespace ves {
     SV2D::SV2D(const std::vector<Eigen::Vector2d> &polygon, const int order, const int maxMonomialOrder)
         : m_Polygon{polygon}, m_Order{order}, m_InvDiameter{pow(ptp::Polygon2D::Diameter(polygon), -1.0)}
-    {
-        Init();
-    }
-    void SV2D::Init()
     {
         // Centroid
         std::vector<double> integrals = ptp::Polygon2D::MonomialIntegrals(m_Polygon, 1);
@@ -24,8 +21,13 @@ namespace ves {
         m_InnerOrder = std::max(-1, m_Order - (int)ptp::Polygon2D::UniqueSides(m_Polygon).size() + concavityOrder);
         
         // Integrals
-        m_SMIntegrals = ScaledMonomialIntegrals(std::max(2 * m_Order, (m_InnerOrder > -1 ? 0 : m_InnerOrder + concavityOrder) + m_Order));
-
+        const int maxOrder = std::max(maxMonomialOrder, std::max(2 * m_Order, (m_InnerOrder > -1 ? 0 : m_InnerOrder + concavityOrder) + m_Order));
+        m_SMIntegrals = ScaledMonomialIntegrals(maxOrder);
+        
+        Init();
+    }
+    void SV2D::Init()
+    {
         // Serendipity Projector
         const Eigen::MatrixXd D = D_Impl();
         const auto DT = D.transpose();
