@@ -1,4 +1,4 @@
-#include "SV2D.h"
+#include "SE2V2D.h"
 
 #include <mnl/include/mnl.hpp>
 #include <mnl/include/pnl.hpp>
@@ -9,69 +9,48 @@
 #include "ves_internal.h"
 
 namespace ves {
-    SV2D::SV2D(const std::vector<Eigen::Vector2d> &polygon, const int order, const int maxMonomialOrder)
-        : m_Polygon{polygon}, m_Order{order}, m_InvDiameter{pow(ptp::Polygon2D::Diameter(polygon), -1.0)}
+    void SE2V2D::Init()
     {
-        // Centroid
-        std::vector<double> integrals = ptp::Polygon2D::MonomialIntegrals(m_Polygon, 1);
-        m_Centroid = Eigen::Vector2d(integrals[1], integrals[2]) / integrals[0];
-        
-        // Inner Order
-        const int concavityOrder = CheckConcavity();
-        m_InnerOrder = std::max(-1, m_Order - (int)ptp::Polygon2D::UniqueSides(m_Polygon).size() + concavityOrder);
-        
-        // Integrals
-        const int maxOrder = std::max(maxMonomialOrder, std::max(2 * m_Order, (m_InnerOrder > -1 ? 0 : m_InnerOrder + concavityOrder) + m_Order));
-        m_SMIntegrals = ScaledMonomialIntegrals(maxOrder);
-        
-        Init();
-    }
-    void SV2D::Init()
-    {
-        // Serendipity Projector
         const Eigen::MatrixXd D = D_Impl();
-        const auto DT = D.transpose();
-        m_PiS = (DT * D).ldlt().solve(DT);
-
-        // Derivative Projectors
-        const auto G0DSolver = G0_Impl().ldlt();
+        {
+            const Eigen::MatrixXd DT = D.transpose();
+            m_PiS = (DT * D).ldlt().solve(DT);
+        }
+        const Eigen::MatrixXd G0D = G0D_Impl();
         const auto [B0Dx, B0Dy] = B0D_Impl();
+        const auto G0DSolver = G0D.ldlt();
         m_Pi0Dx = G0DSolver.solve(B0Dx);
         m_Pi0Dy = G0DSolver.solve(B0Dy);
     }
-    const double SV2D::Area() const
+    const double SE2V2D::Area() const
     {
-        return m_SMIntegrals[0];
+        return SMIntegral(0);
     }
-    const Eigen::Vector2d SV2D::Centroid() const
+    const Eigen::Vector2d SE2V2D::Centroid() const
     {
         return m_Centroid;
     }
-    const int SV2D::InnerOrder() const
-    {
-        return m_InnerOrder;
-    }
-    const Eigen::MatrixXd SV2D::D() const
+    const Eigen::MatrixXd SE2V2D::D() const
     {
         return D_Impl();
     }
-    const Eigen::MatrixXd SV2D::PiS() const
+    const Eigen::MatrixXd SE2V2D::PiS() const
     {
         return m_PiS;
     }
-    const Eigen::MatrixXd SV2D::Pi0() const
+    const Eigen::MatrixXd SE2V2D::Pi0() const
     {
         return m_PiS;
     }
-    const Eigen::MatrixXd SV2D::Pi0Dx() const
+    const Eigen::MatrixXd SE2V2D::Pi0Dx() const
     {
         return m_Pi0Dx;
     }
-    const Eigen::MatrixXd SV2D::Pi0Dy() const
+    const Eigen::MatrixXd SE2V2D::Pi0Dy() const
     {
         return m_Pi0Dy;
     }
-    const double SV2D::SM(const int alpha, const Eigen::Vector2d &pos) const
+    const double SE2V2D::SM(const int alpha, const Eigen::Vector2d &pos) const
     {
         if (alpha == -1)
             return 0.0;
@@ -80,23 +59,21 @@ namespace ves {
         const Eigen::Vector2d scaledPos = ScaledCoord(pos);
         return _pow(scaledPos(0), mnl::PSpace2D::Exponent(alpha, 0)) * _pow(scaledPos(1), mnl::PSpace2D::Exponent(alpha, 1));
     }
-    const double SV2D::SMIntegral(const int alpha) const
+    const double SE2V2D::SMIntegral(const int alpha) const
     {
         if (alpha < 0)
             return 0.0;
-        return m_SMIntegrals[(size_t) alpha];    
+        return m_SMIntegrals[(size_t) alpha];
     }
-    const double *SV2D::IntegralData() const
+    const double *SE2V2D::IntegralData() const
     {
         return m_SMIntegrals.data();
     }
-
-    const Eigen::Vector2d SV2D::ScaledCoord(const Eigen::Vector2d &pos) const
+    const Eigen::Vector2d SE2V2D::ScaledCoord(const Eigen::Vector2d &pos) const
     {
         return (pos - m_Centroid) * m_InvDiameter;
     }
-
-    const std::vector<double> SV2D::ScaledMonomialIntegrals(const int maxOrder) const
+    const std::vector<double> SE2V2D::ScaledMonomialIntegrals(const int maxOrder) const
     {
         // Get scaled version of polygon
         std::vector<Eigen::Vector2d> scaledPoints(m_Polygon.size());
@@ -111,13 +88,14 @@ namespace ves {
         
         return Integrals;
     }
-    const Eigen::MatrixXd SV2D::D_Impl() const
+    const Eigen::MatrixXd SE2V2D::D_Impl() const
     {
         const int nv = (int) m_Polygon.size();
         const bool convex = m_ConcavityFunction.empty();
         const int nInner = mnl::PSpace2D::SpaceDim(m_InnerOrder);
         const int nDof = m_Order * nv + (convex ? nInner : 2. * nInner);
-        const int nk = mnl::PSpace2D::SpaceDim(m_Order);
+        // The Serendipity projector has to supply moments up to order m_GradOrder - 1
+        const int nk = mnl::PSpace2D::SpaceDim(std::max(m_Order, m_GradOrder - 1));
 
         Eigen::MatrixXd D = Eigen::MatrixXd::Zero(nDof, nk);
 
@@ -148,33 +126,32 @@ namespace ves {
         if (convex)
             return D;
 
-        for (size_t beta{}; beta < nInner; ++beta) {
-            for (size_t alpha{}; alpha < nk; ++alpha) {
+        for (size_t beta{}; beta < nInner; ++beta) 
+            for (size_t alpha{}; alpha < nk; ++alpha) 
                 for (const auto& [index, val] : m_ConcavityFunction)
                     D(m_Order * nv + nInner + beta, alpha) += SMIntegral(mnl::PSpace2D::Product(mnl::PSpace2D::Product(alpha, beta), index)) * val;
-            }
-        }
+            
+        
 
         return D;
     }
-    const Eigen::MatrixXd SV2D::G0_Impl() const
+    const Eigen::MatrixXd SE2V2D::G0D_Impl() const
     {
-        const int nk = mnl::PSpace2D::SpaceDim(m_Order);
-        Eigen::MatrixXd G = Eigen::MatrixXd::Zero(nk, nk);
-        for (int alpha = 0; alpha < nk; ++alpha) {
-            G(alpha, alpha) = SMIntegral(mnl::PSpace2D::Product(alpha, alpha));
-            for (int beta = alpha + 1; beta < nk; ++beta)
-                G(alpha, beta) = G(beta, alpha) = SMIntegral(mnl::PSpace2D::Product(alpha, beta));
+        const int nl = mnl::PSpace2D::SpaceDim(m_GradOrder);
+        Eigen::MatrixXd G0 = Eigen::MatrixXd::Zero(nl, nl);
+        for (int alpha{}; alpha < nl; ++alpha) {
+            G0(alpha, alpha) = SMIntegral(mnl::PSpace2D::Product(alpha, alpha));
+            for (int beta = alpha + 1; beta < nl; ++beta)
+                G0(alpha, beta) = G0(beta, alpha) = SMIntegral(mnl::PSpace2D::Product(beta, alpha));   
         }
-
-        return G;
+        return G0;
     }
-    const std::array<Eigen::MatrixXd, 2> SV2D::B0D_Impl() const
+    const std::array<Eigen::MatrixXd, 2> SE2V2D::B0D_Impl() const
     {
-        const int nkD = mnl::PSpace2D::SpaceDim(m_Order - 1);
+        const int nkD = mnl::PSpace2D::SpaceDim(m_GradOrder);
         const int nv = (int) m_Polygon.size();
         const int nInner = mnl::PSpace2D::SpaceDim(m_InnerOrder);
-        const int nDof = m_Order * nv + nInner;
+        const int nDof = m_Order * nv + nInner; // Concavity?
         Eigen::MatrixXd B0Dx = Eigen::MatrixXd::Zero(nkD, nDof);
         Eigen::MatrixXd B0Dy = Eigen::MatrixXd::Zero(nkD, nDof);
 
@@ -182,7 +159,8 @@ namespace ves {
         // Boundary term
         const auto lobattoPositions = LobattoNodePositions(m_Order);
         const size_t nEdgePoints = lobattoPositions.size() - 2;
-        for (int n = 1; n <= m_Order; ++n) {
+        const int maxN = ceil(0.5 * (m_Order + m_GradOrder + 1));
+        for (int n = 1; n <= maxN; ++n) {
             const auto quadrature = mnl::GaussLegendreRN(n);
             const int startAlpha = mnl::PSpace2D::SpaceDim(2 * (n - 1) - 1),
                       endAlpha = std::min(mnl::PSpace2D::SpaceDim(2 * n - 1), nkD);
@@ -247,7 +225,13 @@ namespace ves {
 
         return { B0Dx, B0Dy };
     }
-    int SV2D::CheckConcavity()
+    const Eigen::MatrixXd SE2V2D::Pi0_Impl() const
+    {
+        const Eigen::MatrixXd D = D_Impl().topRows(mnl::PSpace2D::SpaceDim(m_Order));
+        const Eigen::MatrixXd DT = D.transpose();
+        return (DT * D).ldlt().solve(DT);
+    }
+    int SE2V2D::CheckConcavity()
     {
         auto RESides = ptp::Polygon2D::UniqueReentrantSides(m_Polygon);
         if (RESides.empty())
@@ -267,5 +251,16 @@ namespace ves {
             m_ConcavityFunction[key] = val;
 
         return (int)RESides.size();
+    }
+    int SE2V2D::StabFreeGradOrderEstimate(int nVertices, int order) const
+    {
+        return int(0.5 * ((int)m_Polygon.size() + 2 * m_Order - 5) + 1. - 1e-8);
+    }
+    int SE2V2D::StabFreeGradOrder() const
+    {
+        // m_Order + 1 is the one with no additional degrees of freedom
+        // m_InnerOrder = std::max(-1, m_GradOrder - 1 - eta); - SE2V2D
+        // m_InnerOrder = std::max(-1, m_Order - eta); - SV2D
+        return std::max(m_Order + 1, StabFreeGradOrderEstimate((int) m_Polygon.size(), m_Order));
     }
 }
