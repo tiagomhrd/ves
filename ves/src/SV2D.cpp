@@ -47,6 +47,10 @@ namespace ves {
     {
         return m_Centroid;
     }
+    const int SV2D::InnerOrder() const
+    {
+        return m_InnerOrder;
+    }
     const Eigen::MatrixXd SV2D::PiS() const
     {
         return m_PiS;
@@ -82,7 +86,12 @@ namespace ves {
     {
         return m_SMIntegrals.data();
     }
-    
+
+    const Eigen::Vector2d SV2D::ScaledCoord(const Eigen::Vector2d &pos) const
+    {
+        return (pos - m_Centroid) * m_InvDiameter;
+    }
+
     const std::vector<double> SV2D::ScaledMonomialIntegrals(const int maxOrder) const
     {
         // Get scaled version of polygon

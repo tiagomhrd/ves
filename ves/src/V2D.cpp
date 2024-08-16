@@ -65,6 +65,10 @@ namespace ves {
     {
         return m_SMIntegrals.data();
     }
+    const Eigen::Vector2d V2D::ScaledCoord(const Eigen::Vector2d &pos) const
+    {
+        return (pos - m_Centroid) * m_InvDiameter;
+    }
     const std::vector<double> V2D::ScaledMonomialIntegrals(const int maxOrder) const
     {
         // Get scaled version of polygon

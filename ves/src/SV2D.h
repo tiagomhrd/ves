@@ -16,6 +16,8 @@ namespace ves {
         const Eigen::Vector2d   Centroid() const;
 
         // Main VEM structures for this formulation
+        const int InnerOrder() const;
+
         const Eigen::MatrixXd   D() const { return D_Impl(); }
         
         const Eigen::MatrixXd   PiS() const;
@@ -31,7 +33,7 @@ namespace ves {
     protected:
         void Init();
 
-        const Eigen::Vector2d ScaledCoord(const Eigen::Vector2d& pos) const { return (pos - m_Centroid) * m_InvDiameter; }
+        const Eigen::Vector2d ScaledCoord(const Eigen::Vector2d& pos) const;
         const std::vector<double> ScaledMonomialIntegrals(const int maxOrder) const;
 
         const Eigen::MatrixXd D_Impl() const;

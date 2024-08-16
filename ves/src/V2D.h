@@ -43,7 +43,7 @@ namespace ves {
     protected:
         void Init();
 
-        const Eigen::Vector2d ScaledCoord(const Eigen::Vector2d& pos) const { return (pos - m_Centroid) * m_InvDiameter; }
+        const Eigen::Vector2d ScaledCoord(const Eigen::Vector2d& pos) const;
         const std::vector<double> ScaledMonomialIntegrals(const int maxOrder) const;
 
         const Eigen::MatrixXd D_Impl() const;
