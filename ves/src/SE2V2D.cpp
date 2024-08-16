@@ -9,6 +9,28 @@
 #include "ves_internal.h"
 
 namespace ves {
+    SE2V2D::SE2V2D(const std::vector<Eigen::Vector2d> &polygon, const int order, const int gradOrder, const int maxMonomialOrder)
+        : m_Polygon{polygon}, m_Order{order}, m_InvDiameter{pow(ptp::Polygon2D::Diameter(polygon), -1.0)}
+    {
+        // Centroid
+        std::vector<double> integrals = ptp::Polygon2D::MonomialIntegrals(m_Polygon, 1);
+        m_Centroid = Eigen::Vector2d(integrals[1], integrals[2]) / integrals[0];
+        
+        // Inner Order
+        const int concavityOrder = CheckConcavity();
+        m_InnerOrder = std::max(-1, m_GradOrder - 1 - (int)ptp::Polygon2D::UniqueSides(m_Polygon).size() + concavityOrder);
+
+        // Grad Order
+        m_GradOrder = (gradOrder > -1 ? gradOrder : StabFreeGradOrder());
+        
+        // Integrals
+        const int maxOrder = std::max(maxMonomialOrder,                                             // Override
+                             std::max(2 * m_GradOrder,                                              // G0D 
+                             (m_InnerOrder > -1 ? 0 : m_InnerOrder + concavityOrder) + m_Order));
+        m_SMIntegrals = ScaledMonomialIntegrals(maxOrder);
+        
+        Init();
+    }
     void SE2V2D::Init()
     {
         const Eigen::MatrixXd D = D_Impl();
@@ -21,7 +43,7 @@ namespace ves {
         const auto G0DSolver = G0D.ldlt();
         m_Pi0Dx = G0DSolver.solve(B0Dx);
         m_Pi0Dy = G0DSolver.solve(B0Dy);
-    }
+    }    
     const double SE2V2D::Area() const
     {
         return SMIntegral(0);
@@ -95,7 +117,7 @@ namespace ves {
         const int nInner = mnl::PSpace2D::SpaceDim(m_InnerOrder);
         const int nDof = m_Order * nv + (convex ? nInner : 2. * nInner);
         // The Serendipity projector has to supply moments up to order m_GradOrder - 1
-        const int nk = mnl::PSpace2D::SpaceDim(std::max(m_Order, m_GradOrder - 1));
+        const int nk = mnl::PSpace2D::SpaceDim(m_GradOrder - 1); // m_GradOrder - 1 >= m_Order by
 
         Eigen::MatrixXd D = Eigen::MatrixXd::Zero(nDof, nk);
 
@@ -130,8 +152,6 @@ namespace ves {
             for (size_t alpha{}; alpha < nk; ++alpha) 
                 for (const auto& [index, val] : m_ConcavityFunction)
                     D(m_Order * nv + nInner + beta, alpha) += SMIntegral(mnl::PSpace2D::Product(mnl::PSpace2D::Product(alpha, beta), index)) * val;
-            
-        
 
         return D;
     }
@@ -195,20 +215,8 @@ namespace ves {
 
         // Interior term (Laplacian)
 
-        // Contribution of internal DOFs (if existing)
-        for (int beta = 0; beta < nInner; ++beta) {
-            const int IdX = mnl::PSpace2D::AD(beta, 0),
-                      IdY = mnl::PSpace2D::AD(beta, 1);
-
-            const int expXIdX = mnl::PSpace2D::Exponent(IdX, 0),
-                      expYIdY = mnl::PSpace2D::Exponent(IdY, 1);
-            
-            const int i = m_Order * nv + beta;
-            B0Dx(IdX, i) -= m_InvDiameter * expXIdX;
-            B0Dy(IdY, i) -= m_InvDiameter * expYIdY;
-        }
         // Contribution of the Serendipity projection
-        for (int beta = nInner, nLaplacianSpace = mnl::PSpace2D::SpaceDim(m_Order - 2); beta < nLaplacianSpace; ++beta) { // Works better this way
+        for (int beta = nInner, nLaplacianSpace = mnl::PSpace2D::SpaceDim(m_GradOrder - 1); beta < nLaplacianSpace; ++beta) { // Works better this way
             const int IdX = mnl::PSpace2D::AD(beta, 0),
                       IdY = mnl::PSpace2D::AD(beta, 1);
 
@@ -222,6 +230,24 @@ namespace ves {
                 B0Dy.row(IdY) -= aux * expYIdY;
             }
         }
+        
+        if (m_InnerOrder < 0)
+            return { B0Dx, B0Dy };
+
+        // Contribution of internal DOFs (if existing)
+        for (int beta = 0; beta < nInner; ++beta) {
+            const int IdX = mnl::PSpace2D::AD(beta, 0),
+                      IdY = mnl::PSpace2D::AD(beta, 1);
+
+            const int expXIdX = mnl::PSpace2D::Exponent(IdX, 0),
+                      expYIdY = mnl::PSpace2D::Exponent(IdY, 1);
+            
+            const int i = m_Order * nv + beta;
+            B0Dx(IdX, i) -= m_InvDiameter * expXIdX;
+            B0Dy(IdY, i) -= m_InvDiameter * expYIdY;
+        }
+
+        
 
         return { B0Dx, B0Dy };
     }
