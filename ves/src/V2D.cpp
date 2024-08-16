@@ -7,22 +7,6 @@
 #include "ves_internal.h"
 
 namespace ves {
-    static double _pow(double base, int exp)
-    {
-        double result = 1.;
-        for (;;)
-        {
-            if (exp & 1)
-                result *= base;
-            exp >>= 1;
-            if (!exp)
-                break;
-            base *= base;
-        }
-
-        return result;
-    }
-
     V2D::V2D(const std::vector<Eigen::Vector2d> &polygon, const int order, const int maxMonomialOrder)
         : m_Polygon{polygon}, m_Order{order}, m_InvDiameter{pow(ptp::Polygon2D::Diameter(polygon), -1.)}
     {

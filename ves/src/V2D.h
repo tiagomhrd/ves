@@ -4,7 +4,6 @@
 #include <Eigen/Eigen/Core>
 
 namespace ves {
-
     class V2D {
     public:
         /*  V2D - 2D Virtual Element in Modified Formulation
