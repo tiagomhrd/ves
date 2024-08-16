@@ -51,6 +51,10 @@ namespace ves {
     {
         return m_InnerOrder;
     }
+    const Eigen::MatrixXd SV2D::D() const
+    {
+        return D_Impl();
+    }
     const Eigen::MatrixXd SV2D::PiS() const
     {
         return m_PiS;

@@ -25,15 +25,15 @@ namespace ves {
         const Eigen::Vector2d   Centroid() const;
 
         // Main VEM structures for this formulation
-        const Eigen::MatrixXd   D() const { return D_Impl(); }
-        const Eigen::MatrixXd   GGradTilde() const { return GGradTilde_Impl(); }
+        const Eigen::MatrixXd   D() const;
+        const Eigen::MatrixXd   GGradTilde() const;
         const Eigen::MatrixXd   PiGrad() const;
         const Eigen::MatrixXd   Pi0() const;
 
         // Auxiliar VEM structures that may come in hand
-        const Eigen::MatrixXd   GGrad() const { return GGrad_Impl(); }
-        const Eigen::MatrixXd   G0() const { return G0_Impl(); }
-        const Eigen::MatrixXd   BGrad() const { return BGrad_Impl(); }
+        const Eigen::MatrixXd   GGrad() const;
+        const Eigen::MatrixXd   G0() const;
+        const Eigen::MatrixXd   BGrad() const;
         
         // Scaled Monomial functions
         const double            SM(const int alpha, const Eigen::Vector2d& pos) const; // Scaled monomial of index alpha evaluated at position pos

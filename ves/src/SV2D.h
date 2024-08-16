@@ -18,7 +18,7 @@ namespace ves {
         // Main VEM structures for this formulation
         const int InnerOrder() const;
 
-        const Eigen::MatrixXd   D() const { return D_Impl(); }
+        const Eigen::MatrixXd   D() const;
         
         const Eigen::MatrixXd   PiS() const;
         const Eigen::MatrixXd   Pi0() const;

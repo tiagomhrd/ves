@@ -38,6 +38,14 @@ namespace ves {
     {
         return m_Centroid;
     }
+    const Eigen::MatrixXd V2D::D() const
+    {
+        return D_Impl();
+    }
+    const Eigen::MatrixXd V2D::GGradTilde() const
+    {
+        return GGradTilde_Impl();
+    }
     const Eigen::MatrixXd V2D::PiGrad() const
     {
         return m_PiGrad;
@@ -45,6 +53,18 @@ namespace ves {
     const Eigen::MatrixXd V2D::Pi0() const
     {
         return m_Pi0;
+    }
+    const Eigen::MatrixXd V2D::GGrad() const
+    {
+        return GGrad_Impl();
+    }
+    const Eigen::MatrixXd V2D::G0() const
+    {
+        return G0_Impl();
+    }
+    const Eigen::MatrixXd V2D::BGrad() const
+    {
+        return BGrad_Impl();
     }
     const double V2D::SM(const int alpha, const Eigen::Vector2d &pos) const
     {
