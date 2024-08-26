@@ -24,7 +24,8 @@ namespace ves {
     {
         const Eigen::MatrixXd GGrad = GGrad_Impl();
         const Eigen::MatrixXd BGrad = BGrad_Impl();
-        m_PiGrad = GGrad.ldlt().solve(BGrad);
+        m_PiGrad = GGrad.lu().solve(BGrad); // ldlt seems to be imprecise here.
+        
 
         const Eigen::MatrixXd G0 = G0_Impl();
         const Eigen::MatrixXd B0 = B0_Impl();
