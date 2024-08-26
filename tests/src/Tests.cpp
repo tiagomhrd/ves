@@ -225,7 +225,7 @@ TEST_CASE("Polynomial Endomorphism") {
 			std::stringstream vss;
 			auto poly = regularPolygon(nv);
 			for (int k = 1; k <= maxOrder; ++k){
-				vss << "V2D k=" << k;
+				vss << "V2D PiGrad and Pi0 k=" << k;
 				const int nk = mnl::PSpace2D::SpaceDim(k);
 				SECTION(vss.str()){
 					ves::V2D VE(poly, k);
@@ -239,7 +239,7 @@ TEST_CASE("Polynomial Endomorphism") {
 					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
 				}
 				vss.str("");
-				vss << "SV2D k=" << k;
+				vss << "SV2D Pi0 k=" << k;
 				SECTION(vss.str()){
 					ves::SV2D VE(poly, k);
 					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
@@ -249,7 +249,7 @@ TEST_CASE("Polynomial Endomorphism") {
 					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
 				}
 				vss.str("");
-				vss << "SE2V2D k=" << k;
+				vss << "SE2V2D Pi0 k=" << k;
 				SECTION(vss.str()) {
 					ves::SE2V2D VE(poly, k);
 					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
@@ -263,6 +263,7 @@ TEST_CASE("Polynomial Endomorphism") {
 		ss.str("");
 	}
 }
+
 
 
 int main(int argc, char* argv[]) {
