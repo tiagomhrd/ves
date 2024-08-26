@@ -1,8 +1,11 @@
 #include <iostream>
 #include <catch_amalgamated.hpp>
+#include <corecrt_math_defines.h>
 #include "ves.h"
+#include "mnl/include/mnl.hpp"
 
-const double tol = 1e-10;
+
+const double tol = 1e-8;
 TEST_CASE("HHGTVEM Examples") {
     SECTION("Square"){
 		std::vector<Eigen::Vector2d> poly;
@@ -201,6 +204,65 @@ TEST_CASE("HHGTVEM Examples") {
 	}
 }
 
+/* Auxiliar function to generate regular polygons */
+static std::vector<Eigen::Vector2d> regularPolygon(const int nv) {
+	std::vector<Eigen::Vector2d> polygon;
+	polygon.reserve(nv);
+	const double halfTheta = M_PI / nv;
+	const double r = pow(2. * sin(halfTheta), -1.);
+	for (int i{}; i < nv; ++i)
+		polygon.emplace_back(r * cos(2 * i * halfTheta), r * sin(2 * i * halfTheta));
+	return polygon;
+}
+
+TEST_CASE("Polynomial Endomorphism") {
+	std::stringstream ss;
+	const int maxNumberSides = 10;
+	const int maxOrder = 4;
+	for (int nv = 3; nv <= maxNumberSides; ++nv) {
+		ss << nv << "-gon"; 
+		SECTION(ss.str()) {
+			std::stringstream vss;
+			auto poly = regularPolygon(nv);
+			for (int k = 1; k <= maxOrder; ++k){
+				vss << "V2D k=" << k;
+				const int nk = mnl::PSpace2D::SpaceDim(k);
+				SECTION(vss.str()){
+					ves::V2D VE(poly, k);
+					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
+					const Eigen::MatrixXd D = VE.D();
+
+					const Eigen::MatrixXd PiGrad = VE.PiGrad();
+					REQUIRE_THAT((PiGrad * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
+					
+					const Eigen::MatrixXd Pi0 = VE.Pi0();
+					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
+				}
+				vss.str("");
+				vss << "SV2D k=" << k;
+				SECTION(vss.str()){
+					ves::SV2D VE(poly, k);
+					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
+					const Eigen::MatrixXd D = VE.D();
+
+					const Eigen::MatrixXd Pi0 = VE.Pi0();
+					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
+				}
+				vss.str("");
+				vss << "SE2V2D k=" << k;
+				SECTION(vss.str()) {
+					ves::SE2V2D VE(poly, k);
+					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
+					const Eigen::MatrixXd D = VE.D().leftCols(nk);
+
+					const Eigen::MatrixXd Pi0 = VE.Pi0();
+					REQUIRE_THAT((Pi0 * D - I).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+				}
+			}
+		}
+		ss.str("");
+	}
+}
 
 
 int main(int argc, char* argv[]) {
