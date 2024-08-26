@@ -37,11 +37,11 @@ namespace ves {
         const Eigen::MatrixXd D = D_Impl();
         {
             const Eigen::MatrixXd DT = D.transpose();
-            m_PiS = (DT * D).ldlt().solve(DT);
+            m_PiS = (DT * D).lu().solve(DT);
         }
         const Eigen::MatrixXd G0D = G0D_Impl();
         const auto [B0Dx, B0Dy] = B0D_Impl();
-        const auto G0DSolver = G0D.ldlt();
+        const auto G0DSolver = G0D.lu();
         m_Pi0Dx = G0DSolver.solve(B0Dx);
         m_Pi0Dy = G0DSolver.solve(B0Dy);
     }    

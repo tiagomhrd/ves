@@ -31,10 +31,10 @@ namespace ves {
         // Serendipity Projector
         const Eigen::MatrixXd D = D_Impl();
         const auto DT = D.transpose();
-        m_PiS = (DT * D).ldlt().solve(DT);
+        m_PiS = (DT * D).lu().solve(DT);
 
         // Derivative Projectors
-        const auto G0DSolver = G0D_Impl().ldlt();
+        const auto G0DSolver = G0D_Impl().lu();
         const auto [B0Dx, B0Dy] = B0D_Impl();
         m_Pi0Dx = G0DSolver.solve(B0Dx);
         m_Pi0Dy = G0DSolver.solve(B0Dy);
