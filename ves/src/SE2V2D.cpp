@@ -16,12 +16,13 @@ namespace ves {
         std::vector<double> integrals = ptp::Polygon2D::MonomialIntegrals(m_Polygon, 1);
         m_Centroid = Eigen::Vector2d(integrals[1], integrals[2]) / integrals[0];
         
+        // Grad Order
+        m_GradOrder = (gradOrder > -1 ? gradOrder : StabFreeGradOrder());
+        
         // Inner Order
         const int concavityOrder = CheckConcavity();
         m_InnerOrder = std::max(-1, m_GradOrder - 1 - (int)ptp::Polygon2D::UniqueSides(m_Polygon).size() + concavityOrder);
 
-        // Grad Order
-        m_GradOrder = (gradOrder > -1 ? gradOrder : StabFreeGradOrder());
         
         // Integrals
         const int maxOrder = std::max(maxMonomialOrder,                                             // Override
@@ -62,7 +63,8 @@ namespace ves {
     }
     const Eigen::MatrixXd SE2V2D::Pi0() const
     {
-        return m_PiS;
+        const Eigen::MatrixXd DT = D_Impl().leftCols(mnl::PSpace2D::SpaceDim(m_Order)).transpose();
+        return (DT * DT.transpose()).lu().solve(DT);
     }
     const Eigen::MatrixXd SE2V2D::Pi0Dx() const
     {
@@ -122,7 +124,7 @@ namespace ves {
         Eigen::MatrixXd D = Eigen::MatrixXd::Zero(nDof, nk);
 
         const auto eNodePos = ves::EdgeNodePositions(m_Order);
-        D.block(0, 0, 1, m_Order * nv) = Eigen::VectorXd::Ones(m_Order * nv); // Case for alpha = 0 treated separately 
+        D.block(0, 0, m_Order * nv, 1) = Eigen::VectorXd::Ones(m_Order * nv); // Case for alpha = 0 treated separately 
         for (int v = 0; v < nv; ++v) {
             Eigen::Vector2d startScaledPos = ScaledCoord(m_Polygon[v]);
             Eigen::Vector2d endScaledPos = ScaledCoord(m_Polygon[(v + 1) % nv]);
