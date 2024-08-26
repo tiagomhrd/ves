@@ -34,7 +34,7 @@ namespace ves {
         m_PiS = (DT * D).ldlt().solve(DT);
 
         // Derivative Projectors
-        const auto G0DSolver = G0_Impl().ldlt();
+        const auto G0DSolver = G0D_Impl().ldlt();
         const auto [B0Dx, B0Dy] = B0D_Impl();
         m_Pi0Dx = G0DSolver.solve(B0Dx);
         m_Pi0Dy = G0DSolver.solve(B0Dy);
@@ -122,7 +122,7 @@ namespace ves {
         Eigen::MatrixXd D = Eigen::MatrixXd::Zero(nDof, nk);
 
         const auto eNodePos = ves::EdgeNodePositions(m_Order);
-        D.block(0, 0, 1, m_Order * nv) = Eigen::VectorXd::Ones(m_Order * nv); // Case for alpha = 0 treated separately 
+        D.block(0, 0, m_Order * nv, 1) = Eigen::VectorXd::Ones(m_Order * nv); // Case for alpha = 0 treated separately 
         for (int v = 0; v < nv; ++v) {
             Eigen::Vector2d startScaledPos = ScaledCoord(m_Polygon[v]);
             Eigen::Vector2d endScaledPos = ScaledCoord(m_Polygon[(v + 1) % nv]);
@@ -164,6 +164,18 @@ namespace ves {
         for (int alpha = 0; alpha < nk; ++alpha) {
             G(alpha, alpha) = SMIntegral(mnl::PSpace2D::Product(alpha, alpha));
             for (int beta = alpha + 1; beta < nk; ++beta)
+                G(alpha, beta) = G(beta, alpha) = SMIntegral(mnl::PSpace2D::Product(alpha, beta));
+        }
+
+        return G;
+    }
+    const Eigen::MatrixXd SV2D::G0D_Impl() const
+    {
+        const int nl = mnl::PSpace2D::SpaceDim(m_Order - 1);
+        Eigen::MatrixXd G = Eigen::MatrixXd::Zero(nl, nl);
+        for (int alpha = 0; alpha < nl; ++alpha) {
+            G(alpha, alpha) = SMIntegral(mnl::PSpace2D::Product(alpha, alpha));
+            for (int beta = alpha + 1; beta < nl; ++beta)
                 G(alpha, beta) = G(beta, alpha) = SMIntegral(mnl::PSpace2D::Product(alpha, beta));
         }
 

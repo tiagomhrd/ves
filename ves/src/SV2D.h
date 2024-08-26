@@ -38,6 +38,7 @@ namespace ves {
 
         const Eigen::MatrixXd D_Impl() const;
         const Eigen::MatrixXd G0_Impl() const;
+        const Eigen::MatrixXd G0D_Impl() const;
         const std::array<Eigen::MatrixXd, 2> B0D_Impl() const;
 
         int CheckConcavity();
