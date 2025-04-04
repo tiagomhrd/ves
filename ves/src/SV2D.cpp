@@ -205,12 +205,16 @@ namespace ves {
         // Fetch quadrature rule
         const auto quadrature = mnl::GaussLegendreRN(m_Order);
         std::vector<double> edgeValues(nEdgePoints);
+        std::vector<size_t> edgeIndices(nEdgePoints);
         // Loop over polygon edges
         for (size_t start{}; start < nv; ++start) { // Loop over polygon edges
             const size_t end = (start + 1) % nv;
             // normal * length
             const Eigen::Vector2d weightedNormal = 
                 WeightedNormalFromLine(m_Polygon[start], m_Polygon[end]);
+
+            for (size_t e = 0; e < nEdgePoints; ++e)
+                edgeIndices[e] = nv + (m_Order - 1) * start + e;
 
             // Loop over quadrature points for each edge
             for (const auto&[xsi, weight] : quadrature) {
@@ -230,9 +234,8 @@ namespace ves {
                     B0Dx(alpha, end) += alphaValue * endValue * weightedNormal(0) * weight;
                     B0Dy(alpha, end) += alphaValue * endValue * weightedNormal(1) * weight;
                     for (size_t e = 0; e < nEdgePoints; ++e){
-                        const size_t index = nv + (m_Order - 1) * start + e;
-                        B0Dx(alpha, index) += alphaValue * edgeValues[e] * weightedNormal(0) * weight;
-                        B0Dy(alpha, index) += alphaValue * edgeValues[e] * weightedNormal(1) * weight;
+                        B0Dx(alpha, edgeIndices[e]) += alphaValue * edgeValues[e] * weightedNormal(0) * weight;
+                        B0Dy(alpha, edgeIndices[e]) += alphaValue * edgeValues[e] * weightedNormal(1) * weight;
                     }
                 }
             }

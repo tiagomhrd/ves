@@ -182,31 +182,38 @@ namespace ves {
         const int n = int(ceilf(0.5f * float(m_Order + m_GradOrder + 1)));
         const auto quadrature = mnl::GaussLegendreRN(n);
         std::vector<double> edgeValues(nEdgePoints);
+        std::vector<size_t> edgeIndices(nEdgePoints);
         for (size_t start{}; start < nv; ++start) {
             const size_t end = (start + 1) % nv;
-            const Eigen::Vector2d weightedNormal = 
+
+            for (size_t e = 0; e < nEdgePoints; ++e)
+                edgeIndices[e] = nv + (m_Order - 1) * start + e;
+
+            const Eigen::Vector2d weightedNormal =
                 WeightedNormalFromLine(m_Polygon[start], m_Polygon[end]); // normal * length
-            for (const auto&[xsi, weight] : quadrature) {
+
+            for (const auto& [xsi, weight] : quadrature) {
                 const Eigen::Vector2d pos = (1. - xsi) * m_Polygon[start] + xsi * m_Polygon[end];
                 const double startValue = LagrangePolynomialEvaluation(lobattoPositions, 0, xsi),
-                                endValue = LagrangePolynomialEvaluation(lobattoPositions, nEdgePoints + 1, xsi);
+                    endValue = LagrangePolynomialEvaluation(lobattoPositions, nEdgePoints + 1, xsi);
                 for (size_t e = 0; e < nEdgePoints; ++e)
                     edgeValues[e] = LagrangePolynomialEvaluation(lobattoPositions, e + 1, xsi);
 
-                for (int alpha = 0; alpha < nkD; ++alpha){
+                for (int alpha = 0; alpha < nkD; ++alpha) {
                     const double alphaValue = SM(alpha, pos);
                     B0Dx(alpha, start) += alphaValue * startValue * weightedNormal(0) * weight;
                     B0Dy(alpha, start) += alphaValue * startValue * weightedNormal(1) * weight;
                     B0Dx(alpha, end) += alphaValue * endValue * weightedNormal(0) * weight;
                     B0Dy(alpha, end) += alphaValue * endValue * weightedNormal(1) * weight;
-                    for (size_t e = 0; e < nEdgePoints; ++e){
-                        const size_t index = nv + (m_Order - 1) * start + e;
-                        B0Dx(alpha, index) += alphaValue * edgeValues[e] * weightedNormal(0) * weight;
-                        B0Dy(alpha, index) += alphaValue * edgeValues[e] * weightedNormal(1) * weight;
+                    for (size_t e = 0; e < nEdgePoints; ++e) {
+                        B0Dx(alpha, edgeIndices[e]) += alphaValue * edgeValues[e] * weightedNormal(0) * weight;
+                        B0Dy(alpha, edgeIndices[e]) += alphaValue * edgeValues[e] * weightedNormal(1) * weight;
                     }
                 }
             }
+
         }
+        
         
 
         // First order case has only vertex contributions to the boundary term
