@@ -3,6 +3,7 @@
 #include <corecrt_math_defines.h>
 #include "ves.h"
 #include "mnl/include/mnl.hpp"
+#include "ptp/ptp/src/ptp.h"
 
 
 const double tol = 1e-8;
@@ -215,6 +216,29 @@ static std::vector<Eigen::Vector2d> regularPolygon(const int nv) {
 	return polygon;
 }
 
+// Given order and diameter, this returns a (n_{k-1} x nk, with k = order) matrix containing the monomial coordinates for the dx derivatives
+const Eigen::MatrixXd DxD(const int order, const double invDiameter){
+	const int nk = mnl::PSpace2D::SpaceDim(order), nk1 = mnl::PSpace2D::SpaceDim(order - 1);
+	Eigen::MatrixXd DxD = Eigen::MatrixXd::Zero(nk, nk1);
+	for (int alpha = 1; alpha < nk; ++alpha){
+		const int alphaDx = mnl::PSpace2D::D(alpha, 0);
+		if (alphaDx != -1)
+			DxD(alpha, alphaDx) = mnl::PSpace2D::Exponent(alpha, 0);
+	}
+	return DxD * invDiameter;
+}
+const Eigen::MatrixXd DyD(const int order, const double invDiameter){
+	const int nk = mnl::PSpace2D::SpaceDim(order), nk1 = mnl::PSpace2D::SpaceDim(order - 1);
+	Eigen::MatrixXd DyD = Eigen::MatrixXd::Zero(nk, nk1);
+	for (int alpha = 2; alpha < nk; ++alpha){
+		const int alphaDy = mnl::PSpace2D::D(alpha, 1);
+		if (alphaDy != -1)
+			DyD(alpha, alphaDy) = mnl::PSpace2D::Exponent(alpha, 1);
+	}
+	return DyD * invDiameter;
+}
+
+
 TEST_CASE("Polynomial Endomorphism") {
 	std::stringstream ss;
 	const int maxNumberSides = 10;
@@ -224,7 +248,9 @@ TEST_CASE("Polynomial Endomorphism") {
 		SECTION(ss.str()) {
 			std::stringstream vss;
 			auto poly = regularPolygon(nv);
-			for (int k = 1; k <= maxOrder; ++k){
+			const double invDiameter = pow(ptp::Polygon2D::Diameter(poly), -1.);
+
+			for (int k = 2; k <= maxOrder; ++k){
 				vss << "V2D PiGrad and Pi0 k=" << k;
 				const int nk = mnl::PSpace2D::SpaceDim(k);
 				SECTION(vss.str()){
@@ -239,6 +265,7 @@ TEST_CASE("Polynomial Endomorphism") {
 					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
 				}
 				vss.str("");
+
 				vss << "SV2D Pi0 k=" << k;
 				SECTION(vss.str()){
 					ves::SV2D VE(poly, k);
@@ -246,9 +273,21 @@ TEST_CASE("Polynomial Endomorphism") {
 					const Eigen::MatrixXd D = VE.D();
 
 					const Eigen::MatrixXd Pi0 = VE.Pi0();
-					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
+					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol));
+
+					const Eigen::MatrixXd Pi0Dx = VE.Pi0Dx();
+					const Eigen::MatrixXd PiDx = Pi0Dx * D;
+					const Eigen::MatrixXd dxD = DxD(k, invDiameter);
+					const Eigen::MatrixXd res = Pi0Dx * D - dxD.transpose();
+					REQUIRE_THAT((res).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+
+					const Eigen::MatrixXd Pi0Dy = VE.Pi0Dy();
+					const Eigen::MatrixXd dyD = DyD(k, invDiameter);
+					REQUIRE_THAT((Pi0Dy * D - dyD.transpose()).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+
 				}
 				vss.str("");
+
 				vss << "SE2V2D Pi0 k=" << k;
 				SECTION(vss.str()) {
 					ves::SE2V2D VE(poly, k);
