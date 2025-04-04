@@ -296,6 +296,16 @@ TEST_CASE("Polynomial Endomorphism") {
 
 					const Eigen::MatrixXd Pi0 = VE.Pi0();
 					REQUIRE_THAT((Pi0 * D - I).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+
+					const Eigen::MatrixXd Pi0Dx = VE.Pi0Dx();
+					const Eigen::MatrixXd PiDx = Pi0Dx * D;
+					const Eigen::MatrixXd dxD = DxD(k, invDiameter);
+					const Eigen::MatrixXd res = Pi0Dx * D - dxD.transpose();
+					REQUIRE_THAT((res).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+
+					const Eigen::MatrixXd Pi0Dy = VE.Pi0Dy();
+					const Eigen::MatrixXd dyD = DyD(k, invDiameter);
+					REQUIRE_THAT((Pi0Dy * D - dyD.transpose()).norm(), Catch::Matchers::WithinAbs(0.0, tol));
 				}
 			}
 		}
