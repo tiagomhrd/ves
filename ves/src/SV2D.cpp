@@ -194,19 +194,19 @@ namespace ves {
         // Boundary term
         const auto lobattoPositions = LobattoNodePositions(m_Order);
         const size_t nEdgePoints = lobattoPositions.size() - 2;
-        for (int n = 1; n <= m_Order; ++n) {
+        for (int n = 1; n <= m_Order; ++n) { // Loop over Gauss-Legendre Quadrature rules
             const auto quadrature = mnl::GaussLegendreRN(n);
             const int startAlpha = mnl::PSpace2D::SpaceDim(2 * (n - 1) - 1),
                       endAlpha = std::min(mnl::PSpace2D::SpaceDim(2 * n - 1), nkD);
-            for (size_t start{}; start < nv; ++start) {
+            for (size_t start{}; start < nv; ++start) { // Loop over polygon edges
                 const size_t end = (start + 1) % nv;
                 const Eigen::Vector2d weightedNormal = 
                     WeightedNormalFromLine(m_Polygon[start], m_Polygon[end]); // normal * length
-                for (const auto&[xsi, weight] : quadrature) {
+                for (const auto&[xsi, weight] : quadrature) { // Loop over quadrature points for each edge
                     const Eigen::Vector2d pos = (1. - xsi) * m_Polygon[start] + xsi * m_Polygon[end];
                     const double startValue = LagrangePolynomialEvaluation(lobattoPositions, 0, xsi),
                                  endValue = LagrangePolynomialEvaluation(lobattoPositions, nEdgePoints + 1, xsi);
-                    for (int alpha = startAlpha; alpha < endAlpha; ++alpha){
+                    for (int alpha = startAlpha; alpha < endAlpha; ++alpha){ // Loop over valid monomials for this quadrature rule
                         const double alphaValue = SM(alpha, pos);
                         B0Dx(alpha, start) += alphaValue * startValue * weightedNormal(0) * weight;
                         B0Dy(alpha, start) += alphaValue * startValue * weightedNormal(1) * weight;
