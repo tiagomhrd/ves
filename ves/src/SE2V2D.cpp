@@ -31,6 +31,10 @@ namespace ves {
         
         Init();
     }
+    const int SE2V2D::SFGradOrder() const
+    {
+        return m_GradOrder;
+    }
     void SE2V2D::Init()
     {
         const Eigen::MatrixXd D = D_Impl();
@@ -116,22 +120,22 @@ namespace ves {
         const int nv = (int) m_Polygon.size();
         const bool convex = m_ConcavityFunction.empty();
         const int nInner = mnl::PSpace2D::SpaceDim(m_InnerOrder);
-        const int nDof = m_Order * nv + (convex ? nInner : 2. * nInner);
+        const int nDof = m_Order * nv + (convex ? nInner : 2 * nInner);
         // The Serendipity projector has to supply moments up to order m_GradOrder - 1
-        const int nk = mnl::PSpace2D::SpaceDim(m_GradOrder - 1); // m_GradOrder - 1 >= m_Order by
+        const int nl1 = mnl::PSpace2D::SpaceDim(m_GradOrder - 1); // m_GradOrder - 1 >= m_Order by
 
-        Eigen::MatrixXd D = Eigen::MatrixXd::Zero(nDof, nk);
+        Eigen::MatrixXd D = Eigen::MatrixXd::Zero(nDof, nl1);
 
         const auto eNodePos = ves::EdgeNodePositions(m_Order);
         D.block(0, 0, m_Order * nv, 1) = Eigen::VectorXd::Ones(m_Order * nv); // Case for alpha = 0 treated separately 
         for (int v = 0; v < nv; ++v) {
             Eigen::Vector2d startScaledPos = ScaledCoord(m_Polygon[v]);
             Eigen::Vector2d endScaledPos = ScaledCoord(m_Polygon[(v + 1) % nv]);
-            for (int alpha = 1; alpha < nk; ++alpha)
+            for (int alpha = 1; alpha < nl1; ++alpha)
                 D(v, alpha) = _pow(startScaledPos(0), mnl::PSpace2D::Exponent(alpha, 0)) * _pow(startScaledPos(1), mnl::PSpace2D::Exponent(alpha, 1));
             for (int i = 0; i < m_Order - 1; ++i) {
                 Eigen::Vector2d edgeScaledPos = (1. - eNodePos[i]) * startScaledPos + eNodePos[i] * endScaledPos;
-                for (int alpha = 1; alpha < nk; ++alpha)
+                for (int alpha = 1; alpha < nl1; ++alpha)
                     D(nv + (m_Order - 1) * v + i, alpha) = _pow(edgeScaledPos(0), mnl::PSpace2D::Exponent(alpha, 0)) * _pow(edgeScaledPos(1), mnl::PSpace2D::Exponent(alpha, 1));
             }
         }
@@ -141,7 +145,7 @@ namespace ves {
 
         // Laplacian term if internal DOFs exist
         for (size_t beta{}; beta < nInner; ++beta) {
-            for (size_t alpha{}; alpha < nk; ++alpha) {
+            for (size_t alpha{}; alpha < nl1; ++alpha) {
                 D(m_Order * nv + beta, alpha) += SMIntegral(mnl::PSpace2D::Product(alpha, beta));
             }
         }
@@ -150,7 +154,7 @@ namespace ves {
             return D;
 
         for (size_t beta{}; beta < nInner; ++beta) 
-            for (size_t alpha{}; alpha < nk; ++alpha) 
+            for (size_t alpha{}; alpha < nl1; ++alpha) 
                 for (const auto& [index, val] : m_ConcavityFunction)
                     D(m_Order * nv + nInner + beta, alpha) += SMIntegral(mnl::PSpace2D::Product(mnl::PSpace2D::Product(alpha, beta), index)) * val;
 
@@ -211,11 +215,8 @@ namespace ves {
                     }
                 }
             }
-
         }
         
-        
-
         // First order case has only vertex contributions to the boundary term
         if (m_Order == 1)
             return {B0Dx, B0Dy};

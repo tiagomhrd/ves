@@ -12,6 +12,8 @@ namespace ves {
              const int gradOrder = -1, 
              const int maxMonomialOrder = -1);
 
+        const int SFGradOrder() const;
+
         // Auxiliar geometry functions
         const double            Area() const;
         const Eigen::Vector2d   Centroid() const;
