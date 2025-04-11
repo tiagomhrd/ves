@@ -31,23 +31,39 @@ namespace ves {
         
         Init();
     }
-    const int SE2V2D::SFGradOrder() const
+    void SE2V2D::InitSerendipity()
     {
-        return m_GradOrder;
+        bool PiS_OK = false;
+        const int nl1 = mnl::PSpace2D::SpaceDim(m_GradOrder - 1);
+        do {
+            const Eigen::MatrixXd D = D_Impl();    
+            const Eigen::MatrixXd DT = D.transpose();
+            const auto qr = (DT * D).fullPivHouseholderQr();
+            const auto r = qr.rank();
+            PiS_OK = (r == nl1);
+            if (!PiS_OK) {
+                // Singularity in Serendipity projection required additional internal degrees of freedom
+                ++m_InnerOrder;
+            }
+            else
+                m_PiS = qr.solve(DT);
+        }
+        while (!PiS_OK);
     }
     void SE2V2D::Init()
     {
-        const Eigen::MatrixXd D = D_Impl();
-        {
-            const Eigen::MatrixXd DT = D.transpose();
-            m_PiS = (DT * D).lu().solve(DT);
-        }
+        InitSerendipity();
+        
         const Eigen::MatrixXd G0D = G0D_Impl();
         const auto [B0Dx, B0Dy] = B0D_Impl();
         const auto G0DSolver = G0D.lu();
         m_Pi0Dx = G0DSolver.solve(B0Dx);
         m_Pi0Dy = G0DSolver.solve(B0Dy);
-    }    
+    }
+    const int SE2V2D::SFGradOrder() const
+    {
+        return m_GradOrder;
+    }
     const double SE2V2D::Area() const
     {
         return SMIntegral(0);

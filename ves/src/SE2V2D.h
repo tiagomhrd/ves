@@ -33,6 +33,7 @@ namespace ves {
 
     protected:
         void Init();
+        void InitSerendipity();
 
         const Eigen::Vector2d ScaledCoord(const Eigen::Vector2d& pos) const;
         const std::vector<double> ScaledMonomialIntegrals(const int maxOrder) const;
