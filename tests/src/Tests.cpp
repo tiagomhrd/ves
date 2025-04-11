@@ -205,12 +205,12 @@ TEST_CASE("HHGTVEM Examples") {
 	}
 }
 
-/* Auxiliar function to generate regular polygons */
+/* Auxiliar function to generate regular polygons of unit area */
 static std::vector<Eigen::Vector2d> regularPolygon(const int nv) {
 	std::vector<Eigen::Vector2d> polygon;
 	polygon.reserve(nv);
 	const double halfTheta = M_PI / nv;
-	const double r = pow(2. * sin(halfTheta), -1.);
+	const double r = pow(nv * sin(2. * halfTheta) * .5, -.5);
 	for (int i{}; i < nv; ++i)
 		polygon.emplace_back(r * cos(2 * i * halfTheta), r * sin(2 * i * halfTheta));
 	return polygon;
@@ -295,7 +295,6 @@ TEST_CASE("Polynomial Endomorphism") {
 					ves::SE2V2D VE(poly, k);
 					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
 					const Eigen::MatrixXd D = VE.D().leftCols(nk);
-
 					const Eigen::MatrixXd Pi0 = VE.Pi0();
 					REQUIRE_THAT((Pi0 * D - I).norm(), Catch::Matchers::WithinAbs(0.0, tol));
 
