@@ -257,12 +257,19 @@ TEST_CASE("Polynomial Endomorphism") {
 					ves::V2D VE(poly, k);
 					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
 					const Eigen::MatrixXd D = VE.D();
-
 					const Eigen::MatrixXd PiGrad = VE.PiGrad();
-					REQUIRE_THAT((PiGrad * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
-					
 					const Eigen::MatrixXd Pi0 = VE.Pi0();
-					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol)); 
+
+					const Eigen::MatrixXd respg = PiGrad * D - I;
+					const double respgnorm = respg.norm();
+					INFO("respg norm = " << respgnorm);
+
+					const Eigen::MatrixXd resp0 = Pi0 * D - I;
+					const double resp0norm = resp0.norm();
+					INFO("resp0 norm = " << resp0norm);
+
+					REQUIRE_THAT(respgnorm, Catch::Matchers::WithinAbs(0.0, tol)); 
+					REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol)); 
 				}
 				vss.str("");
 
@@ -273,68 +280,83 @@ TEST_CASE("Polynomial Endomorphism") {
 					const Eigen::MatrixXd D = VE.D();
 
 					const Eigen::MatrixXd Pi0 = VE.Pi0();
-					REQUIRE_THAT((Pi0 * D - I).norm(),Catch::Matchers::WithinAbs(0.0, tol));
-
+					const Eigen::MatrixXd res0 = Pi0 * D - I;
+					const double res0norm = res0.norm();
+					INFO("res0 norm = " << res0norm);
+					
 					const Eigen::MatrixXd Pi0Dx = VE.Pi0Dx();
-					const Eigen::MatrixXd PiDx = Pi0Dx * D;
 					const Eigen::MatrixXd dxD = DxD(k, invDiameter);
 					const Eigen::MatrixXd resx = Pi0Dx * D - dxD.transpose();
-					REQUIRE_THAT(resx.norm(), Catch::Matchers::WithinAbs(0.0, tol));
-
+					const double resxnorm = resx.norm();
+					INFO("resx norm = " << resxnorm);
+					
 					const Eigen::MatrixXd Pi0Dy = VE.Pi0Dy();
 					const Eigen::MatrixXd dyD = DyD(k, invDiameter);
 					const Eigen::MatrixXd resy = Pi0Dy * D - dyD.transpose();
-					REQUIRE_THAT(resy.norm(), Catch::Matchers::WithinAbs(0.0, tol));
+					const double resynorm = resy.norm();
+					INFO("resy norm = " << resynorm);
+					
+					
+					REQUIRE_THAT(res0norm, Catch::Matchers::WithinAbs(0.0, tol));
+					REQUIRE_THAT(resxnorm, Catch::Matchers::WithinAbs(0.0, tol));
+					REQUIRE_THAT(resynorm, Catch::Matchers::WithinAbs(0.0, tol));
 
 				}
 				vss.str("");
 
 				vss << "SE2V2D Pi0 k=" << k;
 				SECTION(vss.str()) {
-
-					// Check Pi0 projector of order k
+					
 					ves::SE2V2D VE(poly, k);
-					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
-					const Eigen::MatrixXd D = VE.D().leftCols(nk);
-					const Eigen::MatrixXd Pi0 = VE.Pi0();
-					REQUIRE_THAT((Pi0 * D - I).norm(), Catch::Matchers::WithinAbs(0.0, tol));
-
-					// Check PiS projector of order l-1
 					const int l = VE.SFGradOrder();
 					INFO("l = " << l);
 					const int kInner = VE.InnerOrder();
 					INFO("kInner = " << kInner);
+
+					// Check Pi0 projector of order k
+					const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nk, nk);
+					const Eigen::MatrixXd D = VE.D().leftCols(nk);
+					const Eigen::MatrixXd Pi0 = VE.Pi0();
+					const Eigen::MatrixXd respi0 = Pi0 * D - I;
+					const double respi0norm = respi0.norm();
+					INFO("respi0 norm = " << respi0norm);
+
+					// Check PiS projector of order l-1
 					const int nl = mnl::PSpace2D::SpaceDim(l);
 					const int nl1 = mnl::PSpace2D::SpaceDim(l-1);
 					const Eigen::MatrixXd PiS = VE.PiS();
 					const Eigen::MatrixXd Dl = VE.D();
-					const Eigen::MatrixXd pseudoI = PiS * Dl;
-					REQUIRE_THAT((PiS * Dl - Eigen::MatrixXd::Identity(nl1, nl1)).norm(), Catch::Matchers::WithinAbs(0.0, tol));
-
+					const Eigen::MatrixXd respis = PiS * Dl - Eigen::MatrixXd::Identity(nl1, nl1);
+					const double respisnorm = respis.norm();
+					INFO("respis norm = " << respisnorm);
+					
 					// Check Pi0Dx projector of order l
 					const Eigen::MatrixXd Pi0Dx = VE.Pi0Dx();
-					const Eigen::MatrixXd PiDx = Pi0Dx * D;
 					const int nk1 = mnl::PSpace2D::SpaceDim(k - 1);
 					const Eigen::MatrixXd dxDT = [&nk, &nl, &nk1, &invDiameter, &k]() {
 						Eigen::MatrixXd dxd = Eigen::MatrixXd::Zero(nl, nk);
 						dxd.block(0, 0, nk1, nk) = DxD(k, invDiameter).transpose();
 						return dxd;
-						}();
-					//const Eigen::MatrixXd dxD = DxD(l, invDiameter);
+					}();
 					const Eigen::MatrixXd resx = Pi0Dx * D - dxDT;
-					REQUIRE_THAT(resx.norm(), Catch::Matchers::WithinAbs(0.0, tol));
-
+					const double resxnorm = resx.norm();
+					INFO("resx norm = " << resxnorm);
+					
 					// Check Pi0Dy projector of order l
 					const Eigen::MatrixXd Pi0Dy = VE.Pi0Dy();
-					const Eigen::MatrixXd PiDy = Pi0Dy * D;
 					const Eigen::MatrixXd dyDT = [&nk, &nl, &nk1, &invDiameter, &k]() {
 						Eigen::MatrixXd dyd = Eigen::MatrixXd::Zero(nl, nk);
 						dyd.block(0, 0, nk1, nk) = DyD(k, invDiameter).transpose();
 						return dyd;
-						}();
-					//const Eigen::MatrixXd dyD = DyD(k, invDiameter);
+					}();
 					const Eigen::MatrixXd resy = Pi0Dy * D - dyDT;
-					REQUIRE_THAT((resy).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+					const double resynorm = resy.norm();
+					INFO("resy norm = " << resynorm);
+
+					REQUIRE_THAT(respi0norm, Catch::Matchers::WithinAbs(0.0, tol));					
+					REQUIRE_THAT(respisnorm, Catch::Matchers::WithinAbs(0.0, tol));
+					REQUIRE_THAT(resxnorm, Catch::Matchers::WithinAbs(0.0, tol));
+					REQUIRE_THAT(resynorm, Catch::Matchers::WithinAbs(0.0, tol));
 				}
 			}
 		}
