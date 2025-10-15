@@ -278,12 +278,13 @@ TEST_CASE("Polynomial Endomorphism") {
 					const Eigen::MatrixXd Pi0Dx = VE.Pi0Dx();
 					const Eigen::MatrixXd PiDx = Pi0Dx * D;
 					const Eigen::MatrixXd dxD = DxD(k, invDiameter);
-					const Eigen::MatrixXd res = Pi0Dx * D - dxD.transpose();
-					REQUIRE_THAT((res).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+					const Eigen::MatrixXd resx = Pi0Dx * D - dxD.transpose();
+					REQUIRE_THAT(resx.norm(), Catch::Matchers::WithinAbs(0.0, tol));
 
 					const Eigen::MatrixXd Pi0Dy = VE.Pi0Dy();
 					const Eigen::MatrixXd dyD = DyD(k, invDiameter);
-					REQUIRE_THAT((Pi0Dy * D - dyD.transpose()).norm(), Catch::Matchers::WithinAbs(0.0, tol));
+					const Eigen::MatrixXd resy = Pi0Dy * D - dyD.transpose();
+					REQUIRE_THAT(resy.norm(), Catch::Matchers::WithinAbs(0.0, tol));
 
 				}
 				vss.str("");
@@ -342,5 +343,26 @@ TEST_CASE("Polynomial Endomorphism") {
 
 int main(int argc, char* argv[]) {
 	int result = Catch::Session().run(argc, argv);
+
+	const auto poly = regularPolygon(10);
+	const double invDiameter = pow(ptp::Polygon2D::Diameter(poly), -1.);
+	constexpr int k = 4;
+	constexpr int nk = mnl::PSpace2D::SpaceDim(k);
+
+	ves::SE2V2D VE(poly, k);
+	const Eigen::MatrixXd Pi0Dx = VE.Pi0Dx();
+	const Eigen::MatrixXd D = VE.D().leftCols(nk);
+	constexpr int nk1 = mnl::PSpace2D::SpaceDim(k - 1);
+	const int l = VE.SFGradOrder();
+	const int nl = mnl::PSpace2D::SpaceDim(l);
+	const Eigen::MatrixXd dxDT = [&nk, &nl, &nk1, &invDiameter, &k]() {
+		Eigen::MatrixXd dxd = Eigen::MatrixXd::Zero(nl, nk);
+		dxd.block(0, 0, nk1, nk) = DxD(k, invDiameter).transpose();
+		return dxd;
+		}();
+	//const Eigen::MatrixXd dxD = DxD(l, invDiameter);
+	const Eigen::MatrixXd PiDx = Pi0Dx * D;
+	const Eigen::MatrixXd resx = PiDx - dxDT;
+
 	return result;
 }
