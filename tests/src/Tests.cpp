@@ -301,6 +301,9 @@ TEST_CASE("Polynomial Endomorphism") {
 
 					// Check PiS projector of order l-1
 					const int l = VE.SFGradOrder();
+					INFO("l = " << l);
+					const int kInner = VE.InnerOrder();
+					INFO("kInner = " << kInner);
 					const int nl = mnl::PSpace2D::SpaceDim(l);
 					const int nl1 = mnl::PSpace2D::SpaceDim(l-1);
 					const Eigen::MatrixXd PiS = VE.PiS();

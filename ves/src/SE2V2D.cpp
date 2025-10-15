@@ -64,6 +64,10 @@ namespace ves {
     {
         return m_GradOrder;
     }
+    const int SE2V2D::InnerOrder() const
+    {
+        return m_InnerOrder;
+    }
     const double SE2V2D::Area() const
     {
         return SMIntegral(0);

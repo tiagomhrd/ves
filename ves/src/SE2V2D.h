@@ -13,6 +13,7 @@ namespace ves {
              const int maxMonomialOrder = -1);
 
         const int SFGradOrder() const;
+        const int InnerOrder() const;
 
         // Auxiliar geometry functions
         const double            Area() const;
