@@ -17,7 +17,7 @@ namespace ves {
 
         return result;
     }
-    const std::vector<double> ves::EdgeNodePositions(const int order)
+    const std::vector<double> EdgeNodePositions(const int order)
     {
         std::vector<double> out(size_t(order - 1));
         const auto gl = mnl::GaussLobattoR(2 * (order + 1) - 3);

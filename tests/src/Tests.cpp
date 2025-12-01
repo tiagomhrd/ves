@@ -1,10 +1,12 @@
 #include <iostream>
 #include <catch_amalgamated.hpp>
-#include <corecrt_math_defines.h>
 #include "ves.h"
 #include "mnl/include/mnl.hpp"
 #include "ptp/ptp/src/ptp.h"
 
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
 
 const double tol = 1e-8;
 TEST_CASE("HHGTVEM Examples") {
