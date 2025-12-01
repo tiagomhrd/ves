@@ -17,7 +17,7 @@ namespace ves {
     class V3D {
     public:
         V3D(const std::vector<Eigen::Vector3d>& vertices,
-            const std::vector<std::vector<int>>& faces,
+            const std::vector<std::vector<size_t>>& faces,
             const int order,
             const int maxMonomialOrder = -1);
 
@@ -43,6 +43,7 @@ namespace ves {
 
     protected:
         void Init();
+        void ParseEdges();
 
         const Eigen::Vector3d ScaledCoord(const Eigen::Vector3d& pos) const;
         const std::vector<double> ScaledMonomialIntegrals(const int maxOrder) const;
@@ -57,9 +58,18 @@ namespace ves {
         const Eigen::MatrixXd B0_Impl() const;
 
     protected:
+        using EdgeCode = int;
+        const Eigen::Vector3d EdgeNodePosition(EdgeCode code) const;
+        const EdgeCode GetEdgeCode(int start, int end, int innerPos) const;
+
+    protected:
         int m_Order;
+        // Polyhedron representation
         std::vector<Eigen::Vector3d> m_Vertices;
-        std::vector<std::vector<int>> m_Faces; // Each face is defined by a vector of vertex indices
+        std::vector<std::vector<size_t>> m_Faces; // Each face is defined by a vector of vertex indices
+        
+        // Internal representation of edges
+        std::vector<EdgeCode> m_EdgeNodes; // Each entry encodes start and end point and innerPosition
         
         // Scaled monomial related storage
         std::vector<double> m_SMIntegrals;
