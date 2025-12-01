@@ -142,6 +142,49 @@ namespace ves {
         return ptp::Polyhedron::MonomialIntegrals(scaledVertices, m_Faces, maxOrder);
     }
 
+    const Eigen::MatrixXd V3D::D_Impl() const
+    {
+        const int nodeDofs = static_cast<int>(m_Vertices.size()) * m_Order;
+        const int faceDofs = mnl::PSpace2D::SpaceDim(m_Order - 2) * static_cast<int>(m_Faces.size());
+        const int volDofs = mnl::PSpace3D::SpaceDim(m_Order - 2);        
+        const int ndof = nodeDofs + faceDofs + volDofs;
+        const int psDim3D = mnl::PSpace3D::SpaceDim(m_Order);
+        Eigen::MatrixXd D = Eigen::MatrixXd::Zero(ndof, psDim3D);
+        
+        
+        // Node DOFs
+        // Handle vertex and edge separately!
+        for (size_t i = 0; i < nodeDofs; ++i) {
+            for (int alpha = 0; alpha < psDim3D; ++alpha)
+                D(i, alpha) += SM(alpha, pos, centroid, diameter);
+        }
+
+        if (m_Order > 1) {
+            // Face DOFs
+            int currentDOF = nNodes;
+            
+            // As the scaled monomials of faces and interior don't match, this computation of the moments is needed.
+            const auto faceElements = GetFaceElements();
+            for (auto f : faceElements) {
+                for (size_t beta{}, nInnerFace = f->NInternalDOFs(); beta < nInnerFace; ++beta) {
+                    for (int alpha = 0; alpha < psDim3D; ++alpha) {
+                        D(currentDOF, alpha) = f->MonomialMoment(beta, alpha, centroid, diameter);
+                    }
+                    ++currentDOF;
+                }
+            }
+
+            // Volume DOFs
+            for (int beta{}, nInner = NInternalDOFs(); beta < nInner; ++beta) {
+                for (int alpha{}; alpha < psDim3D; ++alpha) {
+                    D(currentDOF, alpha) = m_MonomialIntegrals[Poly3D::ProductIndex(alpha, beta)];
+                }
+                ++currentDOF;
+            }
+        }
+
+        return D;
+    }
 
     const Eigen::MatrixXd V3D::GGradTilde_Impl() const
     {
