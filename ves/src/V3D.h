@@ -91,11 +91,12 @@ namespace ves {
     */
     class V3D_Face {
     public:
-
+        V3D_Face(const std::vector<Eigen::Vector3d>& vertices, const int order);
+        
+        const double MonomialMoment() const;
     protected:
         int m_Order;
         std::vector<Eigen::Vector3d> m_Vertices;
-
     };
 }
 

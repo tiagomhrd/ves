@@ -1,8 +1,9 @@
 #include "V3D.h"
+#include <Eigen/Cholesky>
 #include "ptp.h"
 #include "mnl/include/mnl.hpp"
 #include "mnl/include/glq.hpp"
-#include "Eigen/Cholesky"
+#include "ves_internal.h"
 
 namespace ves {
     V3D::V3D(const std::vector<Eigen::Vector3d>& vertices,
@@ -10,58 +11,58 @@ namespace ves {
             const int order,
             const int maxMonomialOrder = -1)
         : m_Order{order}, m_Faces{faces}, m_Vertices{vertices}
-        { 
-            m_SMIntegrals = ScaledMonomialIntegrals(std::max(maxMonomialOrder, 2 * (m_Order - 1)));
-            Init();
-        }
+    { 
+        m_SMIntegrals = ScaledMonomialIntegrals(std::max(maxMonomialOrder, 2 * (m_Order - 1)));
+        Init();
+    }
 
-        const double V3D::SM(const int alpha, const Eigen::Vector3d &pos) const
-        {
-            double SM = 1.0;
-            if (alpha == 0)
-                return SM;
-
-            const auto scaledCoord = ScaledCoord(pos);
-            int sumExp = 0;
-            for (int x = 0; x < 3; ++x)
-            {
-                const int exp = mnl::PSpace3D::Exponent(alpha, x);
-                if (exp == 0)
-                    continue;
-                SM *= pow(scaledCoord(x), exp);
-                sumExp += exp;
-            }
-            SM *= pow(m_InvDiameter, sumExp);
-
+    const double V3D::SM(const int alpha, const Eigen::Vector3d &pos) const
+    {
+        double SM = 1.0;
+        if (alpha == 0)
             return SM;
-        }
 
-        const double V3D::SMIntegral(const int alpha) const
+        const auto scaledCoord = ScaledCoord(pos);
+        int sumExp = 0;
+        for (int x = 0; x < 3; ++x)
         {
-            return m_SMIntegrals[alpha];
+            const int exp = mnl::PSpace3D::Exponent(alpha, x);
+            if (exp == 0)
+                continue;
+            SM *= pow(scaledCoord(x), exp);
+            sumExp += exp;
         }
+        SM *= pow(m_InvDiameter, sumExp);
 
-        const double *V3D::IntegralData() const
-        {
-            return m_SMIntegrals.data();
-        }
+        return SM;
+    }
 
-        void V3D::Init()
-        {
-            // Parse edges (give them a known order that can be recalled)
-            if (m_Order > 1)
-                ParseEdges();
+    const double V3D::SMIntegral(const int alpha) const
+    {
+        return m_SMIntegrals[alpha];
+    }
 
-            // L2-Projector
-            const Eigen::MatrixXd G0 = G0_Impl();
-            const Eigen::MatrixXd B0 = B0_Impl();
-            m_Pi0 = G0.ldlt().solve(B0);
+    const double *V3D::IntegralData() const
+    {
+        return m_SMIntegrals.data();
+    }
 
-            // Grad-Projector
-            const Eigen::MatrixXd GGrad = GGrad_Impl();
-            const Eigen::MatrixXd BGrad = BGrad_Impl();
-            m_PiGrad = GGrad.ldlt().solve(BGrad);
-        }
+    void V3D::Init()
+    {
+        // Parse edges (give them a known order that can be recalled)
+        if (m_Order > 1)
+            ParseEdges();
+
+        // L2-Projector
+        const Eigen::MatrixXd G0 = G0_Impl();
+        const Eigen::MatrixXd B0 = B0_Impl();
+        m_Pi0 = G0.ldlt().solve(B0);
+
+        // Grad-Projector
+        const Eigen::MatrixXd GGrad = GGrad_Impl();
+        const Eigen::MatrixXd BGrad = BGrad_Impl();
+        m_PiGrad = GGrad.ldlt().solve(BGrad);
+    }
 
     const double V3D::Volume() const
     {
@@ -144,45 +145,56 @@ namespace ves {
 
     const Eigen::MatrixXd V3D::D_Impl() const
     {
-        const int nodeDofs = static_cast<int>(m_Vertices.size()) * m_Order;
-        const int faceDofs = mnl::PSpace2D::SpaceDim(m_Order - 2) * static_cast<int>(m_Faces.size());
-        const int volDofs = mnl::PSpace3D::SpaceDim(m_Order - 2);        
-        const int ndof = nodeDofs + faceDofs + volDofs;
-        const int psDim3D = mnl::PSpace3D::SpaceDim(m_Order);
-        Eigen::MatrixXd D = Eigen::MatrixXd::Zero(ndof, psDim3D);
+        const int vertexDofs = static_cast<int>(m_Vertices.size());
+        const int edgeDofs = static_cast<int>(m_EdgeNodes.size());
+        const int nInnerFace = mnl::PSpace2D::SpaceDim(m_Order - 2);
+        const int faceDofs = nInnerFace * static_cast<int>(m_Faces.size());
+        const int volDofs = mnl::PSpace3D::SpaceDim(m_Order - 2);
+        const int ndof = vertexDofs + edgeDofs + faceDofs + volDofs;
         
+        const int nk = mnl::PSpace3D::SpaceDim(m_Order);
+
+        Eigen::MatrixXd D = Eigen::MatrixXd::Zero(ndof, nk);
         
-        // Node DOFs
-        // Handle vertex and edge separately!
-        for (size_t i = 0; i < nodeDofs; ++i) {
-            for (int alpha = 0; alpha < psDim3D; ++alpha)
-                D(i, alpha) += SM(alpha, pos, centroid, diameter);
+        // Vertex DOFs
+        int i = 0;
+        for (const auto& vertex : m_Vertices){
+            for (int alpha = 0; alpha < nk; ++alpha){
+                D(i, alpha) = SM(alpha, vertex);
+            }
+            ++i;
+        }
+        if (m_Order == 1)
+            return D;
+        
+        // Edge DOFs
+        for (const auto& edgecode : m_EdgeNodes){
+            const auto pos = EdgeNodePosition(edgecode);
+            for (int alpha = 0; alpha < nk; ++alpha){
+                D(i, alpha) = SM(alpha, pos);
+            }
+            ++i;
         }
 
-        if (m_Order > 1) {
-            // Face DOFs
-            int currentDOF = nNodes;
-            
-            // As the scaled monomials of faces and interior don't match, this computation of the moments is needed.
-            const auto faceElements = GetFaceElements();
-            for (auto f : faceElements) {
-                for (size_t beta{}, nInnerFace = f->NInternalDOFs(); beta < nInnerFace; ++beta) {
-                    for (int alpha = 0; alpha < psDim3D; ++alpha) {
-                        D(currentDOF, alpha) = f->MonomialMoment(beta, alpha, centroid, diameter);
-                    }
-                    ++currentDOF;
+        // Face DOFs
+        const auto faceElements = GetFaceElements();
+        for (auto f : faceElements) {
+            for (size_t beta{}; beta < nInnerFace; ++beta) {
+                for (int alpha = 0; alpha < nk; ++alpha) {
+                    D(i, alpha) = f->MonomialMoment(beta, alpha, m_Centroid, m_InvDiameter);
                 }
-            }
-
-            // Volume DOFs
-            for (int beta{}, nInner = NInternalDOFs(); beta < nInner; ++beta) {
-                for (int alpha{}; alpha < psDim3D; ++alpha) {
-                    D(currentDOF, alpha) = m_MonomialIntegrals[Poly3D::ProductIndex(alpha, beta)];
-                }
-                ++currentDOF;
+                ++i;
             }
         }
 
+        // Volume DOFs
+        for (int beta{}; beta < volDofs; ++beta) {
+            for (int alpha{}; alpha < nk; ++alpha) {
+                D(i, alpha) = m_SMIntegrals[mnl::PSpace3D::Product(alpha, beta)];
+            }
+            ++i;
+        }
+        
         return D;
     }
 
@@ -245,15 +257,14 @@ namespace ves {
     {
         const int key = static_cast<int>(m_Vertices.size());
         
-        const auto qNats = mnl::GaussLobattoR(2 * (m_Order + 1) - 3);
-
         const int end = code % key;
         code /= key;
         const int start = code % key;
         code /= key;
         const int innerPos = code % key;
-
-        const double xi = qNats[innerPos + 1][0];
+        
+        const auto nats = EdgeNodePositions(m_Order);
+        const double& xi = nats[innerPos];
         return m_Vertices[start] * (1. - xi) + m_Vertices[end] * xi;
     }
     const V3D::EdgeCode V3D::GetEdgeCode(int start, int end, int innerPos) const
