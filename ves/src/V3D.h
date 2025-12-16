@@ -8,7 +8,7 @@ namespace ves {
     
     This class provides basic structures for the Modified VEM formulation 
     (see https://www.sciencedirect.com/science/article/pii/S0898122113003179#s000015)
-    
+    REVIEW
     The constructor takes:
     polyhedron                  - Vector of vertices and faces defining the polyhedron
     order                       - Order of the element
@@ -16,9 +16,9 @@ namespace ves {
     */
     class V3D {
     public:
-        V3D(const std::vector<Eigen::Vector3d>& vertices,
-            const std::vector<std::vector<size_t>>& faces,
+        V3D(const std::vector<V3D_Face*>& faceElements,
             const int order,
+            const std::vector<size_t>& invertedFaces = {},
             const int maxMonomialOrder = -1);
 
         // Auxiliar geometry functions
@@ -43,7 +43,9 @@ namespace ves {
 
     protected:
         void Init();
+        void SetupVertices();
         void ParseEdges();
+        void SetupFaces(const std::vector<size_t>& invertedFaces);
 
         const Eigen::Vector3d ScaledCoord(const Eigen::Vector3d& pos) const;
         const std::vector<double> ScaledMonomialIntegrals(const int maxOrder) const;
@@ -67,6 +69,7 @@ namespace ves {
         // Polyhedron representation
         std::vector<Eigen::Vector3d> m_Vertices;
         std::vector<std::vector<size_t>> m_Faces; // Each face is defined by a vector of vertex indices
+        std::vector<V3D_Face*> m_FaceElements;
         
         // Internal representation of edges
         std::vector<EdgeCode> m_EdgeNodes; // Each entry encodes start and end point and innerPosition
@@ -92,8 +95,9 @@ namespace ves {
     class V3D_Face {
     public:
         V3D_Face(const std::vector<Eigen::Vector3d>& vertices, const int order);
-        
-        const double MonomialMoment() const;
+
+        const std::vector<Eigen::Vector3d>& Vertices();
+        const double MonomialMoment(const int beta2D, const int alpha3D, const Eigen::Vector3d& centroid, const double invDiameter) const;
     protected:
         int m_Order;
         std::vector<Eigen::Vector3d> m_Vertices;

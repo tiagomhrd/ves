@@ -1,18 +1,39 @@
 #include "V3D.h"
+
+#include <unordered_set>
+#include <algorithm>
+#include <numeric>
+
 #include <Eigen/Cholesky>
+
 #include "ptp.h"
 #include "mnl/include/mnl.hpp"
 #include "mnl/include/glq.hpp"
+
 #include "ves_internal.h"
 
+
 namespace ves {
-    V3D::V3D(const std::vector<Eigen::Vector3d>& vertices,
-            const std::vector<std::vector<size_t>>& faces,
+    V3D::V3D(const std::vector<V3D_Face*>& faceElements,
             const int order,
-            const int maxMonomialOrder = -1)
-        : m_Order{order}, m_Faces{faces}, m_Vertices{vertices}
-    { 
+            const std::vector<size_t>& invertedFaces,
+            const int maxMonomialOrder)
+        : m_Order{order}, m_FaceElements{faceElements}
+    {
+        // Compute vector of vertices of the polyhedron from face elements
+        SetupVertices();
+
+        // Compute face connectivity with respect to this vector of vertices
+        SetupFaces(invertedFaces);
+
+        // Compute and store data about edge nodes, if needed
+        if (m_Order > 1)
+            ParseEdges();
+
+        // Compute and store scaled monomial integrals
         m_SMIntegrals = ScaledMonomialIntegrals(std::max(maxMonomialOrder, 2 * (m_Order - 1)));
+
+        // Compute and store projectors
         Init();
     }
 
@@ -49,10 +70,6 @@ namespace ves {
 
     void V3D::Init()
     {
-        // Parse edges (give them a known order that can be recalled)
-        if (m_Order > 1)
-            ParseEdges();
-
         // L2-Projector
         const Eigen::MatrixXd G0 = G0_Impl();
         const Eigen::MatrixXd B0 = B0_Impl();
@@ -62,6 +79,44 @@ namespace ves {
         const Eigen::MatrixXd GGrad = GGrad_Impl();
         const Eigen::MatrixXd BGrad = BGrad_Impl();
         m_PiGrad = GGrad.ldlt().solve(BGrad);
+    }
+
+    void V3D::SetupVertices()
+    {
+        // Find Vertex list
+        std::unordered_set<Eigen::Vector3d> verticesSet;
+        const size_t upperBoundNVertices = std::transform_reduce(m_FaceElements.cbegin(),
+                                                       m_FaceElements.cend(), 
+                                                       size_t{}, 
+                                                       std::plus<>{}, 
+                                                       [](const auto facePtr){ return facePtr->Vertices().size(); });
+        verticesSet.reserve(upperBoundNVertices);
+        for (const auto facePtr : m_FaceElements)
+            for (auto& point : facePtr->Vertices())
+                verticesSet.insert(point);
+
+        m_Vertices.reserve(verticesSet.size());
+        std::copy(verticesSet.cbegin(), verticesSet.cend(), std::back_inserter(m_Vertices));
+        
+    }
+
+    void V3D::SetupFaces(const std::vector<size_t> &invertedFaces)
+    {
+        m_Faces.reserve(m_FaceElements.size());
+        for (const auto facePtr : m_FaceElements){
+            auto& faceIndices = m_Faces.emplace_back();
+            const auto& vertices = facePtr->Vertices();
+            faceIndices.reserve(vertices.size());
+            for (const auto& pos : vertices) {
+                const auto& it = std::find(m_Vertices.cbegin(), m_Vertices.cend(), pos);
+                // Try and strip this if not debug
+                if (it == m_Vertices.cend())
+                    return;
+                faceIndices.emplace_back(size_t{std::distance(m_Vertices.cbegin(), it)});
+            }
+        }
+        for (const auto i : invertedFaces)
+            std::reverse(m_Faces[i].begin(), m_Faces[i].end());
     }
 
     const double V3D::Volume() const
@@ -177,8 +232,7 @@ namespace ves {
         }
 
         // Face DOFs
-        const auto faceElements = GetFaceElements();
-        for (auto f : faceElements) {
+        for (const auto& f : m_FaceElements) {
             for (size_t beta{}; beta < nInnerFace; ++beta) {
                 for (int alpha = 0; alpha < nk; ++alpha) {
                     D(i, alpha) = f->MonomialMoment(beta, alpha, m_Centroid, m_InvDiameter);
@@ -272,5 +326,9 @@ namespace ves {
         const int key = static_cast<int>(m_Vertices.size());
         bool ordered = start < end;
         return (end > start ? innerPos : m_Order - 2 - innerPos) * pow(key, 2) + (end > start ? start : end) * key + (end > start ? end : start);
+    }
+    const std::vector<Eigen::Vector3d> &V3D_Face::Vertices()
+    {
+        return m_Vertices;
     }
 };
