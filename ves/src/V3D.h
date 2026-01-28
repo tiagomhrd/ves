@@ -2,8 +2,11 @@
 #ifndef VES_V3D
 #define VES_V3D 
 #include <Eigen/Eigen/Core>
+#include "V2D.h"
 
 namespace ves {
+    class V3D_Face;
+
     /*  V3D - 3D Virtual Element in Modified Formulation
     
     This class provides basic structures for the Modified VEM formulation 
@@ -43,12 +46,22 @@ namespace ves {
 
     protected:
         void Init();
-        void SetupVertices();
-        void ParseEdges();
-        void SetupFaces(const std::vector<size_t>& invertedFaces);
+        const std::vector<Eigen::Vector3d> ComputeVertices() const;
+        const std::vector<std::vector<size_t>> ComputeFaces(const std::vector<size_t>& invertedFaces) const;
+        
+        using EdgeCode = int;
+        const Eigen::Vector3d EdgeNodePosition(EdgeCode code) const;
+        const EdgeCode GetEdgeCode(int start, int end, int innerPos) const;
+        const std::vector<EdgeCode> ComputeEdges() const;
+
+        const Eigen::Vector3d ComputeCentroid() const;
+        const double ComputeInvDiameter() const;
+        const std::vector<double> ScaledMonomialIntegrals(const int maxOrder) const;
+
+        const Eigen::MatrixXd ComputePiGrad() const;
+        const Eigen::MatrixXd ComputePi0() const;
 
         const Eigen::Vector3d ScaledCoord(const Eigen::Vector3d& pos) const;
-        const std::vector<double> ScaledMonomialIntegrals(const int maxOrder) const;
 
         const Eigen::MatrixXd D_Impl() const;
 
@@ -60,27 +73,23 @@ namespace ves {
         const Eigen::MatrixXd B0_Impl() const;
 
     protected:
-        using EdgeCode = int;
-        const Eigen::Vector3d EdgeNodePosition(EdgeCode code) const;
-        const EdgeCode GetEdgeCode(int start, int end, int innerPos) const;
-
-    protected:
-        int m_Order;
+        const int m_Order;
         // Polyhedron representation
-        std::vector<Eigen::Vector3d> m_Vertices;
-        std::vector<std::vector<size_t>> m_Faces; // Each face is defined by a vector of vertex indices
-        std::vector<V3D_Face*> m_FaceElements;
+        const std::vector<V3D_Face*> m_FaceElements;
+        const std::vector<Eigen::Vector3d> m_Vertices;
+        const std::vector<std::vector<size_t>> m_Faces; // Each face is defined by a vector of vertex indices
         
         // Internal representation of edges
-        std::vector<EdgeCode> m_EdgeNodes; // Each entry encodes start and end point and innerPosition
+        const std::vector<EdgeCode> m_EdgeNodes; // Each entry encodes start and end point and innerPosition
         
         // Scaled monomial related storage
-        std::vector<double> m_SMIntegrals;
-        Eigen::Vector3d m_Centroid;
-        double m_InvDiameter;
+        const double m_InvDiameter;
+        const Eigen::Vector3d m_Centroid;
+        const std::vector<double> m_SMIntegrals;
 
         // Projector storage
-        Eigen::MatrixXd m_PiGrad, m_Pi0;
+        const Eigen::MatrixXd m_PiGrad;
+        const Eigen::MatrixXd m_Pi0;
     };
 
     /*  V3D_Face - Face of a 3D Virtual Element
@@ -96,11 +105,40 @@ namespace ves {
     public:
         V3D_Face(const std::vector<Eigen::Vector3d>& vertices, const int order);
 
-        const std::vector<Eigen::Vector3d>& Vertices();
-        const double MonomialMoment(const int beta2D, const int alpha3D, const Eigen::Vector3d& centroid, const double invDiameter) const;
+        const std::vector<Eigen::Vector3d>& Vertices() const;
+        const Eigen::Vector3d Normal() const;
+
+        // Required for face DOFs in D
+        const double MonomialMoment(const int beta2D, const int alpha3D, const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
+
+        /* 
+            B0(alpha, i) = \int_F{\mu_\alpha\phi_i d\sigma}
+            * \mu_\alpha    Scaled monomial of index alpha of the polyhedron the current object is a face of.
+            * \phi_i        Ansatz function of index i of the face.
+            * polyhedronCentroid and polyhedronInvDiameter are required to compute \mu_\alpha
+            
+            This assumes \alpha < dim P_{m_Order - 1}.
+        */
+        const Eigen::MatrixXd B0(const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
+
+    protected:
+        // Initialization
+        const Eigen::Vector3d ComputeCentroid() const;
+        const Eigen::Matrix<double, 2, 3> ComputeChangeBasis() const;
+        const Eigen::VectorXd GaussLobattoWeightVector() const;
+        const std::vector<Eigen::Vector2d> LocalVertices() const;
+
+        // Computation
+        const double SM3D(int alpha, const Eigen::Vector3d& pos, const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
+        const Eigen::MatrixXd DM(const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
+
     protected:
         int m_Order;
         std::vector<Eigen::Vector3d> m_Vertices;
+        const Eigen::Vector3d m_Centroid;
+        const Eigen::Matrix<double, 2, 3> m_ChangeBasis;
+        const Eigen::VectorXd m_BoundaryIntegrationWeights;
+        const V2D m_LocalSpace;
     };
 }
 

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include <catch_amalgamated.hpp>
 #include "ves.h"
 #include "mnl/include/mnl.hpp"
@@ -229,6 +230,7 @@ const Eigen::MatrixXd DxD(const int order, const double invDiameter){
 	}
 	return DxD * invDiameter;
 }
+
 const Eigen::MatrixXd DyD(const int order, const double invDiameter){
 	const int nk = mnl::PSpace2D::SpaceDim(order), nk1 = mnl::PSpace2D::SpaceDim(order - 1);
 	Eigen::MatrixXd DyD = Eigen::MatrixXd::Zero(nk, nk1);
@@ -239,7 +241,6 @@ const Eigen::MatrixXd DyD(const int order, const double invDiameter){
 	}
 	return DyD * invDiameter;
 }
-
 
 TEST_CASE("Polynomial Endomorphism") {
 	std::stringstream ss;
@@ -366,30 +367,47 @@ TEST_CASE("Polynomial Endomorphism") {
 	}
 }
 
+struct Mesh {
+	std::vector<ves::V3D_Face> Faces;
+	std::vector<ves::V3D> Polyhedra;
+};
 
+Mesh SoloTetrahedron(const int order = 1) {
+	Mesh m;
+	std::vector<Eigen::Vector3d> Points;
+	Points.reserve(4);
+	Points.emplace_back(0., 0., 0.);
+	Points.emplace_back(1., 0., 0.);
+	Points.emplace_back(0., 1., 0.);
+	Points.emplace_back(0., 0., 1.);
+
+	std::array<std::vector<size_t>, 4> FaceIndices;
+	FaceIndices[0] = {0, 2, 1};
+	FaceIndices[1] = {0, 1, 3};
+	FaceIndices[2] = {0, 3, 2};
+	FaceIndices[3] = {1, 2, 3};
+
+	m.Faces.reserve(FaceIndices.size());
+	for (const auto faceIndices : FaceIndices){
+		const auto vertices = ptp::Polygon3D::GetVertices(Points, faceIndices);
+		ves::V3D_Face face(vertices, order);
+		m.Faces.emplace_back(face);
+	}
+	// std::vector<ves::V3D_Face*> faces;
+	// faces.reserve(m.Faces.size());
+	// std::transform(m.Faces.cbegin(), m.Faces.cend(), std::back_inserter(faces),[](const auto& faceUnqPtr){ return faceUnqPtr.get(); });
+	// ves::V3D tet(faces, order);
+	//m.Polyhedra.emplace_back(std::make_unique<ves::V3D>(faces, order));
+
+	return m;
+}
+
+TEST_CASE("3D Polynomial Endomorphism") {
+	auto m = SoloTetrahedron(1);
+}
 
 int main(int argc, char* argv[]) {
+	auto m = SoloTetrahedron(1);
 	int result = Catch::Session().run(argc, argv);
-
-	const auto poly = regularPolygon(10);
-	const double invDiameter = pow(ptp::Polygon2D::Diameter(poly), -1.);
-	constexpr int k = 4;
-	constexpr int nk = mnl::PSpace2D::SpaceDim(k);
-
-	ves::SE2V2D VE(poly, k);
-	const Eigen::MatrixXd Pi0Dx = VE.Pi0Dx();
-	const Eigen::MatrixXd D = VE.D().leftCols(nk);
-	constexpr int nk1 = mnl::PSpace2D::SpaceDim(k - 1);
-	const int l = VE.SFGradOrder();
-	const int nl = mnl::PSpace2D::SpaceDim(l);
-	const Eigen::MatrixXd dxDT = [&nk, &nl, &nk1, &invDiameter, &k]() {
-		Eigen::MatrixXd dxd = Eigen::MatrixXd::Zero(nl, nk);
-		dxd.block(0, 0, nk1, nk) = DxD(k, invDiameter).transpose();
-		return dxd;
-		}();
-	//const Eigen::MatrixXd dxD = DxD(l, invDiameter);
-	const Eigen::MatrixXd PiDx = Pi0Dx * D;
-	const Eigen::MatrixXd resx = PiDx - dxDT;
-
 	return result;
 }

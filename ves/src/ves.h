@@ -4,4 +4,5 @@
 #include "V2D.h"
 #include "SV2D.h"
 #include "SE2V2D.h"
+#include "V3D.h"
 #endif
