@@ -26,7 +26,7 @@ namespace ves {
           m_EdgeNodes{ComputeEdges()},
           m_InvDiameter{ComputeInvDiameter()},
           m_Centroid{ComputeCentroid()},
-          m_SMIntegrals{ScaledMonomialIntegrals(std::max(maxMonomialOrder, 2 * (m_Order - 1)))},
+          m_SMIntegrals{ScaledMonomialIntegrals(std::max(maxMonomialOrder, 2 * m_Order))},
           m_PiGrad{ComputePiGrad()},
           m_Pi0{ComputePi0()}
     {
@@ -156,6 +156,11 @@ namespace ves {
         return GGrad() * m_PiGrad;
     }
 
+    const Eigen::MatrixXd V3D::B0() const
+    {
+        return B0_Impl();
+    }
+
     const std::vector<V3D::EdgeCode> V3D::ComputeEdges() const
     {
         if (m_Order == 1)
@@ -206,7 +211,10 @@ namespace ves {
                         m_Vertices.cend(),
                         std::back_inserter(scaledVertices),
                         [this](const auto& pos) { return ScaledCoord(pos); } );
-        return ptp::Polyhedron::MonomialIntegrals(scaledVertices, m_Faces, maxOrder);
+        const auto monInts = ptp::Polyhedron::MonomialIntegrals(scaledVertices, m_Faces, maxOrder);
+        std::vector<double> out = monInts;
+        out[0] /= m_InvDiameter * m_InvDiameter * m_InvDiameter;
+        return out;
     }
 
     const Eigen::MatrixXd V3D::ComputePiGrad() const
@@ -282,7 +290,7 @@ namespace ves {
         const int nk = mnl::PSpace3D::SpaceDim(m_Order);
         Eigen::MatrixXd GGT = Eigen::MatrixXd::Zero(nk, nk);
         for (int r = 1; r < nk; ++r) {
-            for (int c = 1; c < nk; ++r) {
+            for (int c = 1; c < nk; ++c) {
                 for (int x = 0; x < 3; ++x) {
                     const int rexpx = mnl::PSpace3D::Exponent(r, x);
                     const int cexpx = mnl::PSpace3D::Exponent(c, x);

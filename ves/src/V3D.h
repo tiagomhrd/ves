@@ -38,6 +38,7 @@ namespace ves {
         const Eigen::MatrixXd   GGrad() const;
         const Eigen::MatrixXd   G0() const;
         const Eigen::MatrixXd   BGrad() const;
+        const Eigen::MatrixXd   B0() const;
 
         // Scaled Monomial functions
         const double            SM(const int alpha, const Eigen::Vector3d& pos) const; // Scaled monomial of index alpha evaluated at position pos
@@ -45,7 +46,6 @@ namespace ves {
         const double*           IntegralData() const;
 
     protected:
-        void Init();
         const std::vector<Eigen::Vector3d> ComputeVertices() const;
         const std::vector<std::vector<size_t>> ComputeFaces(const std::vector<size_t>& invertedFaces) const;
         
