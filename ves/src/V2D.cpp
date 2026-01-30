@@ -94,7 +94,7 @@ namespace ves {
     {
         // Get scaled version of polygon
         std::vector<Eigen::Vector2d> scaledPoints(m_Polygon.size());
-        std::transform(m_Polygon.cbegin(), m_Polygon.cend(), scaledPoints.begin(), [this](const auto& pt) { return this->ScaledCoord(pt); }); // 
+        std::transform(m_Polygon.cbegin(), m_Polygon.cend(), scaledPoints.begin(), [this](const auto& pt) { return ScaledCoord(pt); });
         
         // Compute integrals
         std::vector<double> Integrals = ptp::Polygon2D::MonomialIntegrals(scaledPoints, maxOrder);
