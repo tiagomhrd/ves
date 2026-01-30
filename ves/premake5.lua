@@ -2,7 +2,7 @@ project "ves"
 	location "../build"
 	kind "StaticLib"
 	language "C++"
-	cppdialect "C++14"
+	cppdialect "C++17"
 	staticruntime "on"
 
 	targetdir ("../build/bin/" .. outputdir .. "%{prj.name}")

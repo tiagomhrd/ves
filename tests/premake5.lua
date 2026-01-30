@@ -31,6 +31,7 @@ project "tests"
 
 	links {
 		"Catch2",
+		"ves",
 		"ptp"
 	}
 
