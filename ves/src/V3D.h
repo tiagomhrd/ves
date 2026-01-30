@@ -27,6 +27,7 @@ namespace ves {
         // Auxiliar geometry functions
         const double            Volume() const;
         const Eigen::Vector3d   Centroid() const;
+        const double            InverseDiameter() const;
 
         // Main VEM structures for this formulation
         const Eigen::MatrixXd   D() const;
@@ -121,7 +122,7 @@ namespace ves {
         */
         const Eigen::MatrixXd B0(const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
 
-    protected:
+    //protected:
         // Initialization
         const Eigen::Vector3d ComputeCentroid() const;
         const Eigen::Matrix<double, 2, 3> ComputeChangeBasis() const;
