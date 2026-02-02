@@ -121,8 +121,9 @@ namespace ves {
             This assumes \alpha < dim P_{m_Order - 1}.
         */
         const Eigen::MatrixXd B0(const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
+        const Eigen::MatrixXd DM(const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
 
-    //protected:
+    protected:
         // Initialization
         const Eigen::Vector3d ComputeCentroid() const;
         const Eigen::Matrix<double, 2, 3> ComputeChangeBasis() const;
@@ -131,7 +132,6 @@ namespace ves {
 
         // Computation
         const double SM3D(int alpha, const Eigen::Vector3d& pos, const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
-        const Eigen::MatrixXd DM(const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
 
     protected:
         int m_Order;
