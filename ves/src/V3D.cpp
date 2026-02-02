@@ -3,7 +3,6 @@
 #include <unordered_set>
 #include <algorithm>
 #include <numeric>
-#include <fstream>
 
 #include <Eigen/Eigen/Cholesky>
 #include <Eigen/Eigen/Geometry>
@@ -40,16 +39,13 @@ namespace ves {
             return SM;
 
         const auto scaledCoord = ScaledCoord(pos);
-        int sumExp = 0;
         for (int x = 0; x < 3; ++x)
         {
             const int exp = mnl::PSpace3D::Exponent(alpha, x);
             if (exp == 0)
                 continue;
             SM *= pow(scaledCoord(x), exp);
-            sumExp += exp;
         }
-        SM *= pow(m_InvDiameter, sumExp);
 
         return SM;
     }
@@ -231,11 +227,6 @@ namespace ves {
         const Eigen::MatrixXd GGrad = GGrad_Impl();
         const Eigen::MatrixXd BGrad = BGrad_Impl();
         
-        std::ofstream out("impl.txt");
-        out << "BGrad_Impl\n" << BGrad << '\n';
-        out << "GGrad_Impl\n" << GGrad << '\n';
-        out << "D_Impl\n" << D_Impl() << '\n';
-        out.close();
         return GGrad.fullPivLu().solve(BGrad);
     }
 
@@ -244,7 +235,7 @@ namespace ves {
         const Eigen::MatrixXd G0 = G0_Impl();
         const Eigen::MatrixXd B0 = B0_Impl();
         
-        return G0.ldlt().solve(B0);
+        return G0.fullPivLu().solve(B0);
     }
 
     const Eigen::MatrixXd V3D::D_Impl() const
@@ -385,7 +376,7 @@ namespace ves {
         if (m_Order == 1)
             B.row(0) = Eigen::VectorXd::Ones(ndof) / nv;
         else
-            B.block(0, nB, nuki, nuki) = Eigen::MatrixXd::Identity(nuki, nuki) * SMIntegral(0);
+            B.block(0, nB, nuki, nuki) = Eigen::MatrixXd::Identity(nuki, nuki);
         
         // Boundary integral
         for (size_t f{}; f < (size_t)nf; ++f) {
@@ -401,24 +392,28 @@ namespace ves {
             const int nBF = m_Order * (int)nvF;
             const int ndofF = nBF + nki;
 
-            for (int alpha = 1; alpha < nuk; ++alpha) {
-                for (int k{}; k < 3; ++k) { // Direction
+            // Inverter loop de k e alpha, e primeiro verificar se abs(normal[k]) > tol.
+            constexpr double tol = 1e-8;
+            for (int k{}; k < 3; ++k) { // Direction
+                if (abs(normal[k]) < tol) continue;
+                for (int alpha = 1; alpha < nuk; ++alpha) {
                     if (muD(alpha, k) == -1) continue; // Derivative is 0
+                    const double aux = normal[k] * muExp(alpha, k) * m_InvDiameter;
 
                     // Face-Internal DOFs
-                    for (int j = nBF; j < ndofF; ++j)
-                        B(alpha, nVE + (int)f) += muExp(alpha, k) * normal[k] * BF(muD(alpha, k), j);
+                    for (int j = 0; j < nki; ++j)
+                        B(alpha, nVE + (int)f * nki + j) += BF(muD(alpha, k), nBF + j) * aux;
 
                     if (alpha < nukgrad) continue; // Boundary of Face DOFs are zero for monomial moments that constitute internal face DOFs.
 
                     // Vertex and Edge DOFs
                     for (int j{}; j < nvF; ++j) { // Vertices
                         const int i = (int)faceIndices[j]; // Corresponding polyhedron index
-                        B(alpha, i) += muExp(alpha, k) * normal[k] * BF(muD(alpha, k), j);
+                        B(alpha, i) += BF(muD(alpha, k), j) * aux;
                         for (int e{}; e < m_Order - 1; ++e) { // Edge nodes
                             const auto edgeCode = GetEdgeCode(i, (int)faceIndices[(j + 1) % nvF], e);
                             const int faceEdgeIndex = (int)nvF + nEdgeNodes * j + e;
-                            B(alpha, nv + edgeIndex[edgeCode]) += muExp(alpha, k) * normal[k] * BF(muD(alpha, k), faceEdgeIndex);
+                            B(alpha, nv + edgeIndex[edgeCode]) += BF(muD(alpha, k), faceEdgeIndex) * aux;
                         }
                     }
                 }
@@ -511,12 +506,24 @@ namespace ves {
 
     const double V3D_Face::MonomialMoment(const int beta2D, const int alpha3D, const Eigen::Vector3d &polyhedronCentroid, const double polyhedronInvDiameter) const
     {
+        constexpr double tol = 1e-8;
         const auto edgePoints = EdgeNodePositions(m_Order);
         const int nEdgePoints = int(edgePoints.size());
         const int nv = m_Vertices.size();
         const int nB = nv * m_Order;
-        const int k = mnl::PSpace2D::MonOrder(beta2D) + mnl::PSpace3D::MonOrder(alpha3D);
-        
+
+        // Check face alignment for order reduction
+        int k = mnl::PSpace2D::MonOrder(beta2D);
+        {
+            const auto normal = Normal();
+            if (abs(normal.sum()) > 1.0 + tol)
+                k += mnl::PSpace3D::MonOrder(alpha3D);
+            else
+                for (int i{}; i < 3; ++i)
+                    if (abs(normal[i]) > .9)
+                        k += mnl::PSpace3D::MonOrder(alpha3D) - mnl::PSpace3D::Exponent(alpha3D, i);
+        }
+
         double moment = 0.0;
         Eigen::Vector3d edgePoint = Eigen::Vector3d::Zero();
         for (int v = 0; v < nv; ++v) {
@@ -630,20 +637,35 @@ namespace ves {
         
         const Eigen::MatrixXd D2D = m_LocalSpace.D().block(0, 0, nB, nki);
         const double area = m_LocalSpace.SMIntegral(0);
-        for (int k3D = 0; k3D < m_Order; ++k3D){
+
+        const auto normal = Normal();
+        constexpr double tol = 1e-8;
+        if (abs(normal.sum()) > 1.0 + tol) {
+            for (int k3D = 0; k3D < m_Order; ++k3D) {
+                for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
+                    const double coef = (2 + k3D + k2D) * area;
+                    for (int alpha = mnl::PSpace3D::SpaceDim(k3D - 1), maxAlpha = mnl::PSpace3D::SpaceDim(k3D); alpha < maxAlpha; ++alpha) {
+                        for (int beta = mnl::PSpace2D::SpaceDim(k2D - 1), maxBeta = mnl::PSpace2D::SpaceDim(k2D); beta < maxBeta; ++beta) {
+                            DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))) / coef;
+                        }
+                    }
+                }
+            }
+            return DF;
+        }
+        
+        const int alignmentdirection = (abs(normal[0]) > .9 ? 0 : (abs(normal[1]) > .9 ? 1 : 2));
+        for (int k3D = 0; k3D < m_Order; ++k3D) {
             for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
-                const double coef = (2 + k3D + k2D) * area;
-                for (int alpha = mnl::PSpace3D::SpaceDim(k3D - 1), maxAlpha = mnl::PSpace3D::SpaceDim(k3D); alpha < maxAlpha; ++alpha){
-                    for (int beta = mnl::PSpace2D::SpaceDim(k2D - 1), maxBeta = mnl::PSpace2D::SpaceDim(k2D); beta < maxBeta; ++beta){
-                        DF(nB + beta, alpha) +=  m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))) / coef;
+                for (int alpha = mnl::PSpace3D::SpaceDim(k3D - 1), maxAlpha = mnl::PSpace3D::SpaceDim(k3D); alpha < maxAlpha; ++alpha) {
+                    const int expaligned = mnl::PSpace3D::Exponent(alpha, alignmentdirection);
+                    const double coef = (2 + k3D + k2D - expaligned) * area;
+                    for (int beta = mnl::PSpace2D::SpaceDim(k2D - 1), maxBeta = mnl::PSpace2D::SpaceDim(k2D); beta < maxBeta; ++beta) {
+                        DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))) / coef;
                     }
                 }
             }
         }
-        // for (int alpha = 0; alpha < nukgrad; ++alpha) {
-        //     DF.col(alpha).tail(nki) += Di.transpose() * m_BoundaryIntegrationWeights.cwiseProduct(DF.col(alpha).head(nB));
-        // }
-
         return DF;
     }
 
@@ -662,23 +684,21 @@ namespace ves {
         Eigen::MatrixXd BF = Eigen::MatrixXd::Zero(nukgrad, ndof);
 
         // The projection of a polynomial is itself
-        const Eigen::MatrixXd PiGrad = m_LocalSpace.PiGrad();
+        const Eigen::MatrixXd Pi0 = m_LocalSpace.Pi0();
         // DM(i, \alpha) = DOF_i(\mu_\alpha).
         // MF(\beta,\alpha) - m_\beta component of \mu_\alpha.
-        const Eigen::MatrixXd MF = PiGrad * DM(polyhedronCentroid, polyhedronInvDiameter);
+        const Eigen::MatrixXd MF = Pi0.block(0, 0, nkgrad, ndof) * DM(polyhedronCentroid, polyhedronInvDiameter);
 
         // Contribution of monomials associated with internal DOFs
         const double area = m_LocalSpace.SMIntegral(0);
-        for (int alpha = 0; alpha < nukgrad; ++alpha)
-            for (int beta = 0; beta < nki; ++beta)
-                BF(alpha, nB + beta) += area * MF(beta, alpha);
+        BF.block(0, nB, nukgrad, nki) += area * MF.block(0, 0, nki, nukgrad).transpose();
 
         Eigen::MatrixXd ProductIntegrals = Eigen::MatrixXd::Zero(nkiq, nk);
         for (int beta = nki; beta < nkgrad; ++beta)
             for (int gamma = 0; gamma < nk; ++gamma)
                 ProductIntegrals(beta - nki, gamma) = m_LocalSpace.SMIntegral(mnl::PSpace2D::Product(beta, gamma));
 
-        BF.block(nuki, 0, nukiq, ndof) += (MF.block(nki, nuki, nkiq, nukiq).transpose() * ProductIntegrals * PiGrad.block(0, 0, nk, ndof));
+        BF.block(nuki, 0, nukiq, ndof) += MF.block(nki, nuki, nkiq, nukiq).transpose() * ProductIntegrals * Pi0;
 
         return BF;
     }
