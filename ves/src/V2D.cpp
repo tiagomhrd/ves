@@ -39,6 +39,10 @@ namespace ves {
     {
         return m_Centroid;
     }
+    const double V2D::InverseDiameter() const
+    {
+        return m_InvDiameter;
+    }
     const Eigen::MatrixXd V2D::D() const
     {
         return D_Impl();

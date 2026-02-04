@@ -47,6 +47,9 @@ namespace ves {
     {
         return m_Centroid;
     }
+    const double SV2D::InverseDiameter() const {
+        return m_InvDiameter;
+    }
     const int SV2D::InnerOrder() const
     {
         return m_InnerOrder;

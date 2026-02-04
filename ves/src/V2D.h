@@ -23,6 +23,7 @@ namespace ves {
         // Auxiliar geometry functions
         const double            Area() const;
         const Eigen::Vector2d   Centroid() const;
+        const double            InverseDiameter() const;
 
         // Main VEM structures for this formulation
         const Eigen::MatrixXd   D() const;
