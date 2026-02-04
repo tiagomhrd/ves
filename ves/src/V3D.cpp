@@ -643,14 +643,20 @@ namespace ves {
         if (abs(normal.sum()) > 1.0 + tol) {
             for (int k3D = 0; k3D < m_Order; ++k3D) {
                 for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
-                    const double coef = (2 + k3D + k2D) * area;
-                    for (int alpha = mnl::PSpace3D::SpaceDim(k3D - 1), maxAlpha = mnl::PSpace3D::SpaceDim(k3D); alpha < maxAlpha; ++alpha) {
-                        for (int beta = mnl::PSpace2D::SpaceDim(k2D - 1), maxBeta = mnl::PSpace2D::SpaceDim(k2D); beta < maxBeta; ++beta) {
-                            DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))) / coef;
+                    const double coef = (2 + k3D + k2D);
+                    const int startAlpha = mnl::PSpace3D::SpaceDim(k3D - 1);
+                    const int maxAlpha = mnl::PSpace3D::SpaceDim(k3D);
+                    const int startBeta = mnl::PSpace2D::SpaceDim(k2D - 1);
+                    const int maxBeta = mnl::PSpace2D::SpaceDim(k2D);
+                    for (int alpha = startAlpha; alpha < maxAlpha; ++alpha) {
+                        for (int beta = startBeta; beta < maxBeta; ++beta) {
+                            DF(nB + beta, alpha) += (m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))));
                         }
                     }
+                    DF.block(nB + startBeta, startAlpha, maxBeta - startBeta, maxAlpha - startAlpha) /= coef;
                 }
             }
+            DF.block(nB, 0, nki, nukgrad) /= area;
             return DF;
         }
         
@@ -659,13 +665,15 @@ namespace ves {
             for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
                 for (int alpha = mnl::PSpace3D::SpaceDim(k3D - 1), maxAlpha = mnl::PSpace3D::SpaceDim(k3D); alpha < maxAlpha; ++alpha) {
                     const int expaligned = mnl::PSpace3D::Exponent(alpha, alignmentdirection);
-                    const double coef = (2 + k3D + k2D - expaligned) * area;
+                    const double coef = (2 + k3D + k2D - expaligned);
                     for (int beta = mnl::PSpace2D::SpaceDim(k2D - 1), maxBeta = mnl::PSpace2D::SpaceDim(k2D); beta < maxBeta; ++beta) {
-                        DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))) / coef;
+                        DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB)));
+                        DF(nB + beta, alpha) /= coef;
                     }
                 }
             }
         }
+        DF.block(nB, 0, nki, nukgrad) /= area;
         return DF;
     }
 
