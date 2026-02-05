@@ -16,7 +16,7 @@ ${CMAKE_CURRENT_SOURCE_DIR}/src/SE2V2D.h
 ${CMAKE_CURRENT_SOURCE_DIR}/src/SE2V2D.cpp 
 )
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY CMAKE_CXX_STANDARD 17)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 target_include_directories(${PROJECT_NAME} 
 PRIVATE src ../third_party/ 

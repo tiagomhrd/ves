@@ -6,7 +6,7 @@ add_executable(${PROJECT_NAME}
 ${CMAKE_CURRENT_SOURCE_DIR}/src/Tests.cpp 
 )
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 target_include_directories(${PROJECT_NAME} 
 PRIVATE src  ../ves/src ../third_party/Catch2/ ../third_party/ 
