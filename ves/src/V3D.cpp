@@ -389,7 +389,6 @@ namespace ves {
             const int nBF = m_Order * (int)nvF;
             const int ndofF = nBF + nki;
 
-            // Inverter loop de k e alpha, e primeiro verificar se abs(normal[k]) > tol.
             constexpr double tol = 1e-8;
             for (int k{}; k < 3; ++k) { // Direction
                 if (abs(normal[k]) < tol) continue;

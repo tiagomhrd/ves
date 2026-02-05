@@ -495,12 +495,14 @@ TEST_CASE("3D Polynomial Endomorphism") {
 }
 
 int main(int argc, char* argv[]) {
-	/*const auto m = SoloTetrahedron(2);
+	const auto m = SoloTetrahedron(3);
 	const auto& VE = m.Polyhedra[0];
 	const auto invd = VE.InverseDiameter();
 	const auto cg = VE.Centroid();
 
 	std::ofstream out("out.txt");
+	out.precision(16);
+	
 	int i{};
 	for (const auto& face : m.Faces) {
 		out << "Face" << i++ << '\n';
@@ -514,8 +516,8 @@ int main(int argc, char* argv[]) {
 	out << "BGrad\n" << VE.BGrad() << '\n';
 	out << "GGrad\n" << VE.GGrad() << '\n';
 	out.close();
-	return 0;*/
+	return 0;
 
-	int result = Catch::Session().run(argc, argv);
-	return result;
+	// int result = Catch::Session().run(argc, argv);
+	// return result;
 }
