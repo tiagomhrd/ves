@@ -10,6 +10,7 @@
 #include "ptp/ptp/src/ptp.h"
 #include "mnl/include/mnl.hpp"
 #include "mnl/include/glq.hpp"
+#include "mnl/include/gtq.hpp"
 
 #include "ves_internal.h"
 
@@ -349,7 +350,7 @@ namespace ves {
         const int ne = (int)m_EdgeNodes.size();
         const int nf = (int)m_Faces.size();
         const int nEdgeNodes = m_Order - 1;
-        const int nVE = nv + nEdgeNodes * ne; // Vertex and Edge DOFs
+        const int nVE = nv + ne; // Vertex and Edge DOFs, ne already is multiplied by m_Order - 1;
         const int nB = nVE + nki * nf;
         const int ndof = nB + nuki;
         
@@ -452,7 +453,7 @@ namespace ves {
         const int ne = (int)m_EdgeNodes.size();
         const int nf = (int)m_Faces.size();
         const int nEdgeNodes = m_Order - 1;
-        const int nB = nv + nEdgeNodes * ne + nki * nf;
+        const int nB = nv + ne + nki * nf;
         const int ndof = nB + nuki;
         const double volume = Volume();
         
@@ -506,38 +507,32 @@ namespace ves {
 
     const double V3D_Face::MonomialMoment(const int beta2D, const int alpha3D, const Eigen::Vector3d &polyhedronCentroid, const double polyhedronInvDiameter) const
     {
-        constexpr double tol = 1e-8;
-        const auto edgePoints = EdgeNodePositions(m_Order);
-        const int nEdgePoints = int(edgePoints.size());
-        const int nv = m_Vertices.size();
-        const int nB = nv * m_Order;
-
-        // Check face alignment for order reduction
-        int k = mnl::PSpace2D::MonOrder(beta2D);
-        {
-            const auto normal = Normal();
-            if (abs(normal.sum()) > 1.0 + tol)
-                k += mnl::PSpace3D::MonOrder(alpha3D);
-            else
-                for (int i{}; i < 3; ++i)
-                    if (abs(normal[i]) > .9)
-                        k += mnl::PSpace3D::MonOrder(alpha3D) - mnl::PSpace3D::Exponent(alpha3D, i);
-        }
-
+        const auto triangulation = ptp::Polygon2D::Triangulation(LocalVertices());
+        const double area = m_LocalSpace.SMIntegral(0);
         double moment = 0.0;
-        Eigen::Vector3d edgePoint = Eigen::Vector3d::Zero();
-        for (int v = 0; v < nv; ++v) {
-            const int next = (v + 1) % nv;
-            const Eigen::Vector3d& start = m_Vertices[(size_t) v];
-            const Eigen::Vector3d& end = m_Vertices[(size_t)next];
-            moment += m_BoundaryIntegrationWeights[v] * SM3D(alpha3D, start, polyhedronCentroid, polyhedronInvDiameter) * m_LocalSpace.SM(beta2D, m_ChangeBasis * (start - m_Centroid));
-            for (int e = 0; e < nEdgePoints; ++e) {
-                const double& xi = edgePoints[e];
-                edgePoint = (1. - xi) * start + xi * end;
-                moment += m_BoundaryIntegrationWeights[nv + nEdgePoints * v + e] * SM3D(alpha3D, edgePoint, polyhedronCentroid, polyhedronInvDiameter) * m_LocalSpace.SM(beta2D, m_ChangeBasis * (edgePoint - m_Centroid));
+        for (const auto& triangleIndices : triangulation) {
+            const std::vector<Eigen::Vector3d> triangle{
+                m_Vertices[triangleIndices[0]],
+                m_Vertices[triangleIndices[1]],
+                m_Vertices[triangleIndices[2]]
+            };
+            const double triArea = ptp::Polygon3D::MonomialIntegrals(triangle, 0)[0];
+            const int k2D = mnl::PSpace2D::MonOrder(beta2D);
+            const int k3D = mnl::PSpace3D::MonOrder(alpha3D);
+            const auto quadrature = mnl::GaussLegendreTriangle(k2D + k3D);
+            for (const auto& qData : quadrature) {
+                const double& xi0 = qData[0],
+                            & xi1 = qData[1],
+                              xi2 = 1. - xi0 - xi1,
+                            & w = qData[2];
+                const Eigen::Vector3d qPos = xi0 * triangle[0] + xi1 * triangle[1] + xi2 * triangle[2];
+                const double muAlpha = SM3D(alpha3D, qPos, polyhedronCentroid, polyhedronInvDiameter);
+                const double mBeta = m_LocalSpace.SM(beta2D, LocalCoordinate(qPos));
+                moment += muAlpha * mBeta * w * triArea;
             }
         }
-        return moment / (2 + k) / m_LocalSpace.SMIntegral(0);
+        moment /= area;
+        return moment;
     }
 
     const double V3D_Face::SM3D(int alpha, const Eigen::Vector3d &pos, const Eigen::Vector3d &polyhedronCentroid, const double polyhedronInvDiameter) const
@@ -635,46 +630,122 @@ namespace ves {
             }
         }
         
-        const Eigen::MatrixXd D2D = m_LocalSpace.D().block(0, 0, nB, nki);
+        // Internal DOFs, need to integrate.
+        const auto triangulation = ptp::Polygon2D::Triangulation(localVertices);
         const double area = m_LocalSpace.SMIntegral(0);
-
-        const auto normal = Normal();
-        constexpr double tol = 1e-8;
-        if (abs(normal.sum()) > 1.0 + tol) {
-            for (int k3D = 0; k3D < m_Order; ++k3D) {
-                for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
-                    const double coef = (2 + k3D + k2D);
+        for (const auto& triangleIndices : triangulation){
+            const std::vector<Eigen::Vector3d> triangle{
+                m_Vertices[triangleIndices[0]],
+                m_Vertices[triangleIndices[1]],
+                m_Vertices[triangleIndices[2]]
+            };
+            const double triArea = ptp::Polygon3D::MonomialIntegrals(triangle, 0)[0];
+            for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
+                const int startBeta = mnl::PSpace2D::SpaceDim(k2D - 1);
+                const int maxBeta = mnl::PSpace2D::SpaceDim(k2D);
+                for (int k3D = 0; k3D < m_Order; ++k3D) {
                     const int startAlpha = mnl::PSpace3D::SpaceDim(k3D - 1);
                     const int maxAlpha = mnl::PSpace3D::SpaceDim(k3D);
-                    const int startBeta = mnl::PSpace2D::SpaceDim(k2D - 1);
-                    const int maxBeta = mnl::PSpace2D::SpaceDim(k2D);
-                    for (int alpha = startAlpha; alpha < maxAlpha; ++alpha) {
-                        for (int beta = startBeta; beta < maxBeta; ++beta) {
-                            DF(nB + beta, alpha) += (m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))));
+                    const auto quadrature = mnl::GaussLegendreTriangle(k2D + k3D);
+                    for (const auto& qData : quadrature){
+                        const double& xi0 = qData[0],
+                                    & xi1 = qData[1],
+                                      xi2 = 1. - xi0 - xi1,
+                                    & w   = qData[2];
+                        const Eigen::Vector3d qPos = xi0 * triangle[0] + xi1 * triangle[1] + xi2 * triangle[2];
+                        for (int alpha = startAlpha; alpha < maxAlpha; ++alpha) {
+                            const double muAlpha = SM3D(alpha, qPos, polyhedronCentroid, polyhedronInvDiameter);
+                            for (int beta = startBeta; beta < maxBeta; ++beta) {
+                                const double mBeta = m_LocalSpace.SM(beta, LocalCoordinate(qPos));
+                                DF(nB + beta, alpha) += muAlpha * mBeta * w * triArea;
+                            }
                         }
-                    }
-                    DF.block(nB + startBeta, startAlpha, maxBeta - startBeta, maxAlpha - startAlpha) /= coef;
-                }
-            }
-            DF.block(nB, 0, nki, nukgrad) /= area;
-            return DF;
-        }
-        
-        const int alignmentdirection = (abs(normal[0]) > .9 ? 0 : (abs(normal[1]) > .9 ? 1 : 2));
-        for (int k3D = 0; k3D < m_Order; ++k3D) {
-            for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
-                for (int alpha = mnl::PSpace3D::SpaceDim(k3D - 1), maxAlpha = mnl::PSpace3D::SpaceDim(k3D); alpha < maxAlpha; ++alpha) {
-                    const int expaligned = mnl::PSpace3D::Exponent(alpha, alignmentdirection);
-                    const double coef = (2 + k3D + k2D - expaligned);
-                    for (int beta = mnl::PSpace2D::SpaceDim(k2D - 1), maxBeta = mnl::PSpace2D::SpaceDim(k2D); beta < maxBeta; ++beta) {
-                        DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB)));
-                        DF(nB + beta, alpha) /= coef;
                     }
                 }
             }
         }
         DF.block(nB, 0, nki, nukgrad) /= area;
         return DF;
+
+        // const Eigen::MatrixXd D2D = m_LocalSpace.D().block(0, 0, nB, nki);
+        
+
+        // auto normal = Normal();
+        // constexpr double tol = 1e-8;
+        // if (abs(normal.sum()) > 1.0 + tol) {
+        //     for (int k3D = 0; k3D < m_Order; ++k3D) {
+        //         for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
+        //             const double coef = (2 + k3D + k2D);
+        //             const int startAlpha = mnl::PSpace3D::SpaceDim(k3D - 1);
+        //             const int maxAlpha = mnl::PSpace3D::SpaceDim(k3D);
+        //             const int startBeta = mnl::PSpace2D::SpaceDim(k2D - 1);
+        //             const int maxBeta = mnl::PSpace2D::SpaceDim(k2D);
+        //             for (int alpha = startAlpha; alpha < maxAlpha; ++alpha) {
+        //                 for (int beta = startBeta; beta < maxBeta; ++beta) {
+        //                     DF(nB + beta, alpha) += (m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))));
+        //                     // m_\beta(\nabla \mu_\alpha \cdot \mathbf{x}_F)
+        //                     for (int x{}; x < 3; ++x) {
+        //                         const int dxalpha = mnl::PSpace3D::D(alpha, x);
+        //                         if (dxalpha == -1) continue;
+        //                         const int expxalpha = mnl::PSpace3D::Exponent(alpha, x);
+        //                         DF(nB + beta, alpha) += polyhedronInvDiameter * expxalpha * m_Centroid[x] * DF(nB + beta, dxalpha);
+        //                     }
+        //                     if (beta == 0) continue;
+        //                     const int dx0beta = mnl::PSpace2D::D(beta, 0);
+        //                     const int dx1beta = mnl::PSpace2D::D(beta, 1);
+        //                     const Eigen::Vector2d coefs = m_ChangeBasis * m_Centroid * m_LocalSpace.InverseDiameter();
+        //                     const Eigen::Vector2d gradMBeta = Eigen::Vector2d(
+        //                         (dx0beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha)),
+        //                         (dx1beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha))
+        //                     );
+        //                     if (dx0beta > -1) DF(nB + beta, alpha) += coefs[0] * mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha);
+        //                     if (dx1beta > -1) DF(nB + beta, alpha) += coefs[1] * mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha);
+        //                 }
+        //             }
+        //             DF.block(nB + startBeta, startAlpha, maxBeta - startBeta, maxAlpha - startAlpha) /= coef;
+        //         }
+        //     }
+        //     DF.block(nB, 0, nki, nukgrad) /= area;
+        //     return DF;
+        // }
+
+        // const int alignmentdirection = (abs(normal[0]) > .9 ? 0 : (abs(normal[1]) > .9 ? 1 : 2));
+        // for (int k3D = 0; k3D < m_Order; ++k3D) {
+        //     const int startAlpha = mnl::PSpace3D::SpaceDim(k3D - 1);
+        //     const int maxAlpha = mnl::PSpace3D::SpaceDim(k3D);
+        //     for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
+        //         const int startBeta = mnl::PSpace2D::SpaceDim(k2D - 1);
+        //         const int maxBeta = mnl::PSpace2D::SpaceDim(k2D);
+        //         for (int alpha = startAlpha; alpha < maxAlpha; ++alpha) {
+        //             const int expaligned = mnl::PSpace3D::Exponent(alpha, alignmentdirection);
+        //             const double coef = (2 + k3D + k2D - expaligned);
+        //             for (int beta = startBeta; beta < maxBeta; ++beta) {
+        //                 DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB)));
+        //                 // m_\beta(\nabla \mu_\alpha \cdot \mathbf{x}_F)
+        //                 for (int x{}; x < 3; ++x) {
+        //                     const int dxalpha = mnl::PSpace3D::D(alpha, x);
+        //                     if (dxalpha == -1) continue;
+        //                     const int expxalpha = mnl::PSpace3D::Exponent(alpha, x);
+        //                     // Up to this moment, no internal DOF in DF is divided by the area.
+        //                     DF(nB + beta, alpha) += polyhedronInvDiameter * expxalpha * m_Centroid[x] * DF(nB + beta, dxalpha);
+        //                 }
+        //                 if (beta == 0) continue;
+        //                 const int dx0beta = mnl::PSpace2D::D(beta, 0);
+        //                 const int dx1beta = mnl::PSpace2D::D(beta, 1);
+        //                 const Eigen::Vector2d coefs = m_ChangeBasis * m_Centroid * m_LocalSpace.InverseDiameter();
+        //                 const Eigen::Vector2d gradMBeta = Eigen::Vector2d(
+        //                     (dx0beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha)),
+        //                     (dx1beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha))
+        //                 );
+        //                 if (dx0beta > -1) DF(nB + beta, alpha) += coefs[0] * mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha);
+        //                 if (dx1beta > -1) DF(nB + beta, alpha) += coefs[1] * mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha);
+        //             }
+        //             DF.block(nB + startBeta, alpha, maxBeta - startBeta, 1) /= coef;
+        //         }
+        //     }
+        // }
+        // DF.block(nB, 0, nki, nukgrad) /= area;
+        // return DF;
     }
 
     const Eigen::MatrixXd V3D_Face::B0(const Eigen::Vector3d &polyhedronCentroid, const double polyhedronInvDiameter) const
@@ -716,10 +787,15 @@ namespace ves {
         std::vector<Eigen::Vector2d> out;
         out.reserve(m_Vertices.size());
         for (const auto& vertex : m_Vertices)
-            out.emplace_back(m_ChangeBasis * (vertex - m_Centroid));
+            out.emplace_back(LocalCoordinate(vertex));
         return out;
     }
-    
+
+    const Eigen::Vector2d V3D_Face::LocalCoordinate(const Eigen::Vector3d &globalCoord) const
+    {
+        return m_ChangeBasis * (globalCoord - m_Centroid);
+    }
+
     const Eigen::Matrix<double, 2, 3> V3D_Face::ComputeChangeBasis() const
     {
         Eigen::Matrix<double, 2, 3> out = Eigen::Matrix<double, 2, 3>::Zero();

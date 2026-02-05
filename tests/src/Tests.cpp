@@ -446,7 +446,7 @@ const Mesh SoloCube(const int order = 1) {
 }
 
 TEST_CASE("3D Polynomial Endomorphism") {
-	const int maxOrder = 2;
+	const int maxOrder = 3;
 	std::stringstream ss;
 	for (int k = 1; k <= maxOrder; ++k){
 		ss << "Cube k=" << k;
@@ -470,11 +470,32 @@ TEST_CASE("3D Polynomial Endomorphism") {
 			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol)); 
 		}
 		ss.str("");
+		ss << "Tetrahedron k=" << k;
+		SECTION(ss.str()) {
+			const Mesh m = SoloTetrahedron(k);
+			const auto& VE = m.Polyhedra[0];
+			const int nuk = mnl::PSpace3D::SpaceDim(k);
+			const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nuk, nuk);
+			const Eigen::MatrixXd D = VE.D();
+			const Eigen::MatrixXd PiGrad = VE.PiGrad();
+			const Eigen::MatrixXd Pi0 = VE.Pi0();
+			const Eigen::MatrixXd respg = PiGrad * D - I;
+			const double respgnorm = respg.norm();
+			INFO("respg norm = " << respgnorm);
+
+			const Eigen::MatrixXd resp0 = Pi0 * D - I;
+			const double resp0norm = resp0.norm();
+			INFO("resp0 norm = " << resp0norm);
+
+			REQUIRE_THAT(respgnorm, Catch::Matchers::WithinAbs(0.0, tol));
+			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol));
+		}
+		ss.str("");
 	}
 }
 
 int main(int argc, char* argv[]) {
-	const auto m = SoloTetrahedron(2);
+	/*const auto m = SoloTetrahedron(2);
 	const auto& VE = m.Polyhedra[0];
 	const auto invd = VE.InverseDiameter();
 	const auto cg = VE.Centroid();
@@ -493,8 +514,8 @@ int main(int argc, char* argv[]) {
 	out << "BGrad\n" << VE.BGrad() << '\n';
 	out << "GGrad\n" << VE.GGrad() << '\n';
 	out.close();
-	return 0;
+	return 0;*/
 
-	/*int result = Catch::Session().run(argc, argv);
-	return result;*/
+	int result = Catch::Session().run(argc, argv);
+	return result;
 }

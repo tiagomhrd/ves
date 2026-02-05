@@ -129,6 +129,7 @@ namespace ves {
         const Eigen::Matrix<double, 2, 3> ComputeChangeBasis() const;
         const Eigen::VectorXd GaussLobattoWeightVector() const;
         const std::vector<Eigen::Vector2d> LocalVertices() const;
+        const Eigen::Vector2d LocalCoordinate(const Eigen::Vector3d& globalCoord) const;
 
         // Computation
         const double SM3D(int alpha, const Eigen::Vector3d& pos, const Eigen::Vector3d& polyhedronCentroid, const double polyhedronInvDiameter) const;
