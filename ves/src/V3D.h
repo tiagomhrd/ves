@@ -127,7 +127,6 @@ namespace ves {
         // Initialization
         const Eigen::Vector3d ComputeCentroid() const;
         const Eigen::Matrix<double, 2, 3> ComputeChangeBasis() const;
-        const Eigen::VectorXd GaussLobattoWeightVector() const;
         const std::vector<Eigen::Vector2d> LocalVertices() const;
         const Eigen::Vector2d LocalCoordinate(const Eigen::Vector3d& globalCoord) const;
 
@@ -139,7 +138,6 @@ namespace ves {
         std::vector<Eigen::Vector3d> m_Vertices;
         const Eigen::Vector3d m_Centroid;
         const Eigen::Matrix<double, 2, 3> m_ChangeBasis;
-        const Eigen::VectorXd m_BoundaryIntegrationWeights;
         const V2D m_LocalSpace;
     };
 }

@@ -1,15 +1,11 @@
 #include "V3D.h"
 
-#include <unordered_set>
-#include <algorithm>
 #include <numeric>
 
-#include <Eigen/Eigen/Cholesky>
 #include <Eigen/Eigen/Geometry>
 
 #include "ptp/ptp/src/ptp.h"
 #include "mnl/include/mnl.hpp"
-#include "mnl/include/glq.hpp"
 #include "mnl/include/gtq.hpp"
 
 #include "ves_internal.h"
@@ -491,7 +487,7 @@ namespace ves {
     }
 
     V3D_Face::V3D_Face(const std::vector<Eigen::Vector3d> &vertices, const int order)
-        : m_Order(order), m_Vertices(vertices), m_Centroid(ComputeCentroid()), m_ChangeBasis(ComputeChangeBasis()), m_BoundaryIntegrationWeights(GaussLobattoWeightVector()), m_LocalSpace(LocalVertices(), m_Order)
+        : m_Order(order), m_Vertices(vertices), m_Centroid(ComputeCentroid()), m_ChangeBasis(ComputeChangeBasis()), m_LocalSpace(LocalVertices(), m_Order)
     {
     }
 
@@ -548,42 +544,6 @@ namespace ves {
         for (int x = 0; x < 3; ++x)
             SM *= pow(scaledCoord(x), mnl::PSpace3D::Exponent(alpha, x));
         return SM;
-    }
-
-    const Eigen::VectorXd V3D_Face::GaussLobattoWeightVector() const
-    {
-        const int nv = m_Vertices.size();
-        const int nB = nv * m_Order;
-        Eigen::Matrix2d Q;
-        Q << 0., 1., -1., 0.;
-        Eigen::VectorXd weightVector = Eigen::VectorXd::Zero(nB);
-
-        const auto lobattoPairs = LobattoQuadratureOrdered(m_Order);
-        const int nEdgePoints = int(lobattoPairs.size()) - 2;
-        const auto localVertices = LocalVertices();
-
-        for (int v = 0; v < nv; ++v) {
-            const int next = (v + 1) % nv;
-            const Eigen::Vector2d& start = localVertices[(size_t) v];
-            const Eigen::Vector2d& end = localVertices[(size_t)next];
-            const double length = (end - start).norm();
-            const double d0 = start.dot(Q * ((end - start).normalized()));
-            const double cnst = length * d0;
-            weightVector[v] += cnst;
-            weightVector[next] += cnst;
-            
-            // Edge DOFs
-            for (int e = 0; e < nEdgePoints; ++e)
-                weightVector[nv + (nEdgePoints) * v + e] += cnst;
-        }
-
-        for (int v = 0; v < nv; ++v) {
-            weightVector[v] *= lobattoPairs[0][1];
-            for (int e = 0; e < nEdgePoints; ++e)
-                weightVector[nv + (nEdgePoints) * v + e] *= lobattoPairs[e + 1][1];
-        }
-
-        return weightVector;
     }
 
     const Eigen::MatrixXd V3D_Face::DM(const Eigen::Vector3d &polyhedronCentroid, const double polyhedronInvDiameter) const
@@ -666,86 +626,6 @@ namespace ves {
         }
         DF.block(nB, 0, nki, nukgrad) /= area;
         return DF;
-
-        // const Eigen::MatrixXd D2D = m_LocalSpace.D().block(0, 0, nB, nki);
-        
-
-        // auto normal = Normal();
-        // constexpr double tol = 1e-8;
-        // if (abs(normal.sum()) > 1.0 + tol) {
-        //     for (int k3D = 0; k3D < m_Order; ++k3D) {
-        //         for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
-        //             const double coef = (2 + k3D + k2D);
-        //             const int startAlpha = mnl::PSpace3D::SpaceDim(k3D - 1);
-        //             const int maxAlpha = mnl::PSpace3D::SpaceDim(k3D);
-        //             const int startBeta = mnl::PSpace2D::SpaceDim(k2D - 1);
-        //             const int maxBeta = mnl::PSpace2D::SpaceDim(k2D);
-        //             for (int alpha = startAlpha; alpha < maxAlpha; ++alpha) {
-        //                 for (int beta = startBeta; beta < maxBeta; ++beta) {
-        //                     DF(nB + beta, alpha) += (m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB))));
-        //                     // m_\beta(\nabla \mu_\alpha \cdot \mathbf{x}_F)
-        //                     for (int x{}; x < 3; ++x) {
-        //                         const int dxalpha = mnl::PSpace3D::D(alpha, x);
-        //                         if (dxalpha == -1) continue;
-        //                         const int expxalpha = mnl::PSpace3D::Exponent(alpha, x);
-        //                         DF(nB + beta, alpha) += polyhedronInvDiameter * expxalpha * m_Centroid[x] * DF(nB + beta, dxalpha);
-        //                     }
-        //                     if (beta == 0) continue;
-        //                     const int dx0beta = mnl::PSpace2D::D(beta, 0);
-        //                     const int dx1beta = mnl::PSpace2D::D(beta, 1);
-        //                     const Eigen::Vector2d coefs = m_ChangeBasis * m_Centroid * m_LocalSpace.InverseDiameter();
-        //                     const Eigen::Vector2d gradMBeta = Eigen::Vector2d(
-        //                         (dx0beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha)),
-        //                         (dx1beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha))
-        //                     );
-        //                     if (dx0beta > -1) DF(nB + beta, alpha) += coefs[0] * mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha);
-        //                     if (dx1beta > -1) DF(nB + beta, alpha) += coefs[1] * mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha);
-        //                 }
-        //             }
-        //             DF.block(nB + startBeta, startAlpha, maxBeta - startBeta, maxAlpha - startAlpha) /= coef;
-        //         }
-        //     }
-        //     DF.block(nB, 0, nki, nukgrad) /= area;
-        //     return DF;
-        // }
-
-        // const int alignmentdirection = (abs(normal[0]) > .9 ? 0 : (abs(normal[1]) > .9 ? 1 : 2));
-        // for (int k3D = 0; k3D < m_Order; ++k3D) {
-        //     const int startAlpha = mnl::PSpace3D::SpaceDim(k3D - 1);
-        //     const int maxAlpha = mnl::PSpace3D::SpaceDim(k3D);
-        //     for (int k2D = 0; k2D <= m_Order - 2; ++k2D) {
-        //         const int startBeta = mnl::PSpace2D::SpaceDim(k2D - 1);
-        //         const int maxBeta = mnl::PSpace2D::SpaceDim(k2D);
-        //         for (int alpha = startAlpha; alpha < maxAlpha; ++alpha) {
-        //             const int expaligned = mnl::PSpace3D::Exponent(alpha, alignmentdirection);
-        //             const double coef = (2 + k3D + k2D - expaligned);
-        //             for (int beta = startBeta; beta < maxBeta; ++beta) {
-        //                 DF(nB + beta, alpha) += m_BoundaryIntegrationWeights.dot(D2D.col(beta).cwiseProduct(DF.col(alpha).head(nB)));
-        //                 // m_\beta(\nabla \mu_\alpha \cdot \mathbf{x}_F)
-        //                 for (int x{}; x < 3; ++x) {
-        //                     const int dxalpha = mnl::PSpace3D::D(alpha, x);
-        //                     if (dxalpha == -1) continue;
-        //                     const int expxalpha = mnl::PSpace3D::Exponent(alpha, x);
-        //                     // Up to this moment, no internal DOF in DF is divided by the area.
-        //                     DF(nB + beta, alpha) += polyhedronInvDiameter * expxalpha * m_Centroid[x] * DF(nB + beta, dxalpha);
-        //                 }
-        //                 if (beta == 0) continue;
-        //                 const int dx0beta = mnl::PSpace2D::D(beta, 0);
-        //                 const int dx1beta = mnl::PSpace2D::D(beta, 1);
-        //                 const Eigen::Vector2d coefs = m_ChangeBasis * m_Centroid * m_LocalSpace.InverseDiameter();
-        //                 const Eigen::Vector2d gradMBeta = Eigen::Vector2d(
-        //                     (dx0beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha)),
-        //                     (dx1beta == -1 ? 0.0 : mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha))
-        //                 );
-        //                 if (dx0beta > -1) DF(nB + beta, alpha) += coefs[0] * mnl::PSpace2D::Exponent(beta, 0) * DF(nB + dx0beta, alpha);
-        //                 if (dx1beta > -1) DF(nB + beta, alpha) += coefs[1] * mnl::PSpace2D::Exponent(beta, 1) * DF(nB + dx1beta, alpha);
-        //             }
-        //             DF.block(nB + startBeta, alpha, maxBeta - startBeta, 1) /= coef;
-        //         }
-        //     }
-        // }
-        // DF.block(nB, 0, nki, nukgrad) /= area;
-        // return DF;
     }
 
     const Eigen::MatrixXd V3D_Face::B0(const Eigen::Vector3d &polyhedronCentroid, const double polyhedronInvDiameter) const
