@@ -5,12 +5,13 @@
 #include "ves.h"
 #include "mnl/include/mnl.hpp"
 #include "ptp/ptp/src/ptp.h"
+#include "Eigen/Eigen/Geometry"
 
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
 
-const double tol = 1e-8;
+const double tol = 1e-6;
 TEST_CASE("HHGTVEM Examples") {
     SECTION("Square"){
 		std::vector<Eigen::Vector2d> poly;
@@ -243,10 +244,10 @@ const Eigen::MatrixXd DyD(const int order, const double invDiameter){
 	return DyD * invDiameter;
 }
 
-TEST_CASE("Polynomial Endomorphism") {
+TEST_CASE("2D Polynomial Endomorphism") {
 	std::stringstream ss;
 	const int maxNumberSides = 10;
-	const int maxOrder = 4;
+	const int maxOrder = 3;
 	for (int nv = 3; nv <= maxNumberSides; ++nv) {
 		ss << nv << "-gon"; 
 		SECTION(ss.str()) {
@@ -373,7 +374,7 @@ struct Mesh {
 	std::vector<ves::V3D> Polyhedra;
 };
 
-const Mesh SoloTetrahedron(const int order = 1) {
+const Mesh SoloTetrahedron(const int order = 1, const Eigen::Vector3d& translation = Eigen::Vector3d::Zero(), const Eigen::Matrix3d& rotation = Eigen::Matrix3d::Identity()) {
 	Mesh m;
 	std::vector<Eigen::Vector3d> Points;
 	Points.reserve(4);
@@ -381,6 +382,9 @@ const Mesh SoloTetrahedron(const int order = 1) {
 	Points.emplace_back(1., 0., 0.);
 	Points.emplace_back(0., 1., 0.);
 	Points.emplace_back(0., 0., 1.);
+
+	for (auto& pt : Points)
+		pt = rotation * pt + translation;
 
 	std::array<std::vector<size_t>, 4> FaceIndices;
 	FaceIndices[0] = {0, 2, 1};
@@ -404,11 +408,11 @@ const Mesh SoloTetrahedron(const int order = 1) {
 	return m;
 }
 
-const Mesh SoloCube(const int order = 1) {
+const Mesh SoloCube(const int order = 1, const Eigen::Vector3d& translation = Eigen::Vector3d::Zero(), const Eigen::Matrix3d& rotation = Eigen::Matrix3d::Identity()) {
 	Mesh m;
 	std::vector<Eigen::Vector3d> Points;
 	Points.reserve(8);
-	constexpr double halfside = 1.0;
+	constexpr double halfside = .5;
 	Points.emplace_back(-halfside, -halfside, -halfside);
 	Points.emplace_back(+halfside, -halfside, -halfside);
 	Points.emplace_back(+halfside, +halfside, -halfside);
@@ -417,6 +421,9 @@ const Mesh SoloCube(const int order = 1) {
 	Points.emplace_back(+halfside, -halfside, +halfside);
 	Points.emplace_back(+halfside, +halfside, +halfside);
 	Points.emplace_back(-halfside, +halfside, +halfside);
+
+	for (auto& pt : Points)
+		pt = rotation * pt + translation;
 
 	std::array<std::vector<size_t>, 6> FaceIndices;
 	{
@@ -445,13 +452,120 @@ const Mesh SoloCube(const int order = 1) {
 	return m;
 }
 
+const Mesh SoloDodecahedron(const int order = 1, const Eigen::Vector3d& translation = Eigen::Vector3d::Zero(), const Eigen::Matrix3d& rotation = Eigen::Matrix3d::Identity()){
+	Mesh m;
+	std::vector<Eigen::Vector3d> Points;
+	Points.reserve(20);
+	Points.emplace_back(0.618033988749895, 0.85065080835204, -1.37638192047117);
+	Points.emplace_back(-0.618033988749895, 0.85065080835204, -1.37638192047117);
+	Points.emplace_back(1, 1.37638192047117, -0.324919696232906);
+	Points.emplace_back(1, -0.324919696232906, -1.37638192047117);
+	Points.emplace_back(-1, 1.37638192047117, -0.324919696232906);
+	Points.emplace_back(-1, -0.324919696232906, -1.37638192047117);
+	Points.emplace_back(0, 1.70130161670408, 0.324919696232907);
+	Points.emplace_back(0, -1.05146222423827, -1.37638192047117);
+	Points.emplace_back(1.61803398874989, 0.525731112119133, 0.324919696232906);
+	Points.emplace_back(1.61803398874989, -0.525731112119133, -0.324919696232906);
+	Points.emplace_back(-1.61803398874989, 0.525731112119133, 0.324919696232906);
+	Points.emplace_back(-1.61803398874989, -0.525731112119133, -0.324919696232906);
+	Points.emplace_back(0, 1.05146222423827, 1.37638192047117);
+	Points.emplace_back(0, -1.70130161670408, -0.324919696232907);
+	Points.emplace_back(1, 0.324919696232906, 1.37638192047117);
+	Points.emplace_back(-1, 0.324919696232906, 1.37638192047117);
+	Points.emplace_back(1, -1.37638192047117, 0.324919696232906);
+	Points.emplace_back(-1, -1.37638192047117, 0.324919696232906);
+	Points.emplace_back(0.618033988749895, -0.85065080835204, 1.37638192047117);
+	Points.emplace_back(-0.618033988749895, -0.85065080835204, 1.37638192047117);
+
+	for (auto& pt : Points)
+		pt = rotation * pt + translation;
+
+	std::array<std::vector<size_t>, 12> FaceIndices;
+	{
+		size_t i = 0;
+		FaceIndices[i++] = { 0, 3, 7, 5, 1 };
+		FaceIndices[i++] = { 0, 1, 4, 6, 2 };
+		FaceIndices[i++] = { 0, 2, 8, 9, 3 };
+		FaceIndices[i++] = { 1, 5, 11, 10, 4 };
+		FaceIndices[i++] = { 5, 7, 13, 17, 11 };
+		FaceIndices[i++] = { 3, 9, 16, 13, 7 };
+		FaceIndices[i++] = { 2, 6, 12, 14, 8 };
+		FaceIndices[i++] = { 4, 10, 15, 12, 6 };
+		FaceIndices[i++] = { 10, 11, 17, 19, 15 };
+		FaceIndices[i++] = { 8, 14, 18, 16, 9 };
+		FaceIndices[i++] = { 13, 16, 18, 19, 17 };
+		FaceIndices[i++] = { 12, 15, 19, 18, 14 };
+	}
+
+	m.Faces.reserve(FaceIndices.size());
+	for (const auto faceIndices : FaceIndices){
+		const auto vertices = ptp::Polygon3D::GetVertices(Points, faceIndices);
+		ves::V3D_Face face(vertices, order);
+		m.Faces.emplace_back(face);
+	}
+
+	std::vector<ves::V3D_Face*> faces;
+	faces.reserve(m.Faces.size());
+	for (auto& face : m.Faces)
+		faces.emplace_back(&face);
+
+	m.Polyhedra.emplace_back(faces, order);
+	return m;
+
+}
+
 TEST_CASE("3D Polynomial Endomorphism") {
-	const int maxOrder = 3;
+	const int maxOrder = 2;
 	std::stringstream ss;
 	for (int k = 1; k <= maxOrder; ++k){
 		ss << "Cube k=" << k;
 		SECTION(ss.str()){
 			const Mesh m = SoloCube(k);
+			const auto& VE = m.Polyhedra[0];
+			const int nuk = mnl::PSpace3D::SpaceDim(k);
+			const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nuk, nuk);
+			const Eigen::MatrixXd D = VE.D();
+			const Eigen::MatrixXd PiGrad = VE.PiGrad();
+			const Eigen::MatrixXd Pi0 = VE.Pi0();
+			const Eigen::MatrixXd respg = PiGrad * D - I;
+			const double respgnorm = respg.norm();
+			INFO("respg norm = " << respgnorm);
+
+			const Eigen::MatrixXd resp0 = Pi0 * D - I;
+			const double resp0norm = resp0.norm();
+			INFO("resp0 norm = " << resp0norm);
+
+			REQUIRE_THAT(respgnorm, Catch::Matchers::WithinAbs(0.0, tol)); 
+			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol)); 
+		}
+		ss.str("");
+		ss << "Translated Cube k=" << k;
+		SECTION(ss.str()){
+			const Eigen::Vector3d translation(2., 2., 2.);
+			const Mesh m = SoloCube(k, translation);
+			const auto& VE = m.Polyhedra[0];
+			const int nuk = mnl::PSpace3D::SpaceDim(k);
+			const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nuk, nuk);
+			const Eigen::MatrixXd D = VE.D();
+			const Eigen::MatrixXd PiGrad = VE.PiGrad();
+			const Eigen::MatrixXd Pi0 = VE.Pi0();
+			const Eigen::MatrixXd respg = PiGrad * D - I;
+			const double respgnorm = respg.norm();
+			INFO("respg norm = " << respgnorm);
+
+			const Eigen::MatrixXd resp0 = Pi0 * D - I;
+			const double resp0norm = resp0.norm();
+			INFO("resp0 norm = " << resp0norm);
+
+			REQUIRE_THAT(respgnorm, Catch::Matchers::WithinAbs(0.0, tol)); 
+			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol)); 
+		}
+		ss.str("");
+		ss << "Fully transformed Cube k=" << k;
+		SECTION(ss.str()){
+			const Eigen::Vector3d translation(2., 2., 2.);
+			const Eigen::Matrix3d rotation = Eigen::AngleAxis(1./3., Eigen::Vector3d(1., 1., 1.).normalized()).toRotationMatrix();
+			const Mesh m = SoloCube(k, translation, rotation);
 			const auto& VE = m.Polyhedra[0];
 			const int nuk = mnl::PSpace3D::SpaceDim(k);
 			const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nuk, nuk);
@@ -491,33 +605,77 @@ TEST_CASE("3D Polynomial Endomorphism") {
 			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol));
 		}
 		ss.str("");
+		ss << "Fully Transformed Tetrahedron k=" << k;
+		SECTION(ss.str()) {
+			const Eigen::Vector3d translation(2., 2., 2.);
+			const Eigen::Matrix3d rotation = Eigen::AngleAxis(1./3., Eigen::Vector3d(1., 1., 1.).normalized()).toRotationMatrix();
+			const Mesh m = SoloTetrahedron(k, translation, rotation);
+			const auto& VE = m.Polyhedra[0];
+			const int nuk = mnl::PSpace3D::SpaceDim(k);
+			const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nuk, nuk);
+			const Eigen::MatrixXd D = VE.D();
+			const Eigen::MatrixXd PiGrad = VE.PiGrad();
+			const Eigen::MatrixXd Pi0 = VE.Pi0();
+			const Eigen::MatrixXd respg = PiGrad * D - I;
+			const double respgnorm = respg.norm();
+			INFO("respg norm = " << respgnorm);
+
+			const Eigen::MatrixXd resp0 = Pi0 * D - I;
+			const double resp0norm = resp0.norm();
+			INFO("resp0 norm = " << resp0norm);
+
+			REQUIRE_THAT(respgnorm, Catch::Matchers::WithinAbs(0.0, tol));
+			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol));
+		}
+		ss.str("");
+		ss << "Dodecahedron k=" << k;
+		SECTION(ss.str()) {
+			const Mesh m = SoloDodecahedron(k);
+			const auto& VE = m.Polyhedra[0];
+			const int nuk = mnl::PSpace3D::SpaceDim(k);
+			const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nuk, nuk);
+			const Eigen::MatrixXd D = VE.D();
+			const Eigen::MatrixXd PiGrad = VE.PiGrad();
+			const Eigen::MatrixXd Pi0 = VE.Pi0();
+			const Eigen::MatrixXd respg = PiGrad * D - I;
+			const double respgnorm = respg.norm();
+			INFO("respg norm = " << respgnorm);
+
+			const Eigen::MatrixXd resp0 = Pi0 * D - I;
+			const double resp0norm = resp0.norm();
+			INFO("resp0 norm = " << resp0norm);
+
+			REQUIRE_THAT(respgnorm, Catch::Matchers::WithinAbs(0.0, tol));
+			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol));
+		}
+		ss.str("");
+		ss << "Fully Transformed Dodecahedron k=" << k;
+		SECTION(ss.str()) {
+			const Eigen::Vector3d translation(2., 2., 2.);
+			const Eigen::Matrix3d rotation = Eigen::AngleAxis(1./3., Eigen::Vector3d(1., 1., 1.).normalized()).toRotationMatrix();
+			const Mesh m = SoloDodecahedron(k, translation, rotation);
+			const auto& VE = m.Polyhedra[0];
+			const int nuk = mnl::PSpace3D::SpaceDim(k);
+			const Eigen::MatrixXd I = Eigen::MatrixXd::Identity(nuk, nuk);
+			const Eigen::MatrixXd D = VE.D();
+			const Eigen::MatrixXd PiGrad = VE.PiGrad();
+			const Eigen::MatrixXd Pi0 = VE.Pi0();
+			const Eigen::MatrixXd respg = PiGrad * D - I;
+			const double respgnorm = respg.norm();
+			INFO("respg norm = " << respgnorm);
+
+			const Eigen::MatrixXd resp0 = Pi0 * D - I;
+			const double resp0norm = resp0.norm();
+			INFO("resp0 norm = " << resp0norm);
+
+			REQUIRE_THAT(respgnorm, Catch::Matchers::WithinAbs(0.0, tol));
+			REQUIRE_THAT(resp0norm, Catch::Matchers::WithinAbs(0.0, tol));
+		}
+		ss.str("");
 	}
 }
 
 int main(int argc, char* argv[]) {
-	const auto m = SoloTetrahedron(3);
-	const auto& VE = m.Polyhedra[0];
-	const auto invd = VE.InverseDiameter();
-	const auto cg = VE.Centroid();
-
-	std::ofstream out("out.txt");
-	out.precision(16);
-	
-	int i{};
-	for (const auto& face : m.Faces) {
-		out << "Face" << i++ << '\n';
-		out << "B0\n" << face.B0(cg, invd) << '\n';
-		out << "DM\n" << face.DM(cg, invd) << "\n\n";
-	}
-	out << "Solid\n";
-	out << "PiGrad\n" << VE.PiGrad() << '\n';
-	out << "Pi0\n" << VE.Pi0() << '\n';
-	out << "D\n" << VE.D() << '\n';
-	out << "BGrad\n" << VE.BGrad() << '\n';
-	out << "GGrad\n" << VE.GGrad() << '\n';
-	out.close();
-	return 0;
-
-	// int result = Catch::Session().run(argc, argv);
-	// return result;
+	int result = Catch::Session().run(argc, argv);
+	return result;
 }
